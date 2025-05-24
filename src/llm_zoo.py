@@ -1,0 +1,165 @@
+
+from abc import ABC, abstractmethod
+
+import torch
+import os
+
+from openai import OpenAI
+from together import Together
+import google.generativeai as genai
+from anthropic import Anthropic
+
+class ModelWrapper(ABC):
+    def __init__(self, model_name: str):
+        self.model_name = model_name
+
+    @abstractmethod
+    def invoke(self, prompt: str) -> str:
+        pass
+
+# HuggingFace models
+class HuggingFaceModel(ModelWrapper):
+    def __init__(self, model_name: str, device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16):
+        super().__init__(model_name)
+        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch_dtype).to(device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+
+    def invoke(self, prompt: str, max_new_tokens: int = 2048) -> str:
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
+        outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
+        # only decode the output tokens
+        return self.tokenizer.decode(outputs[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
+
+
+# vllm models
+class VLLMModel(ModelWrapper):
+    def __init__(self, model_name: str, device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16, device_num: int = 1):
+        super().__init__(model_name)
+        # TODO: add vllm
+        pass
+        
+    def invoke(self, prompt: str, max_new_tokens: int = 2048) -> str:
+        pass
+
+
+# API based models
+
+# gpt-4o-2024-05-13, gpt-4-turbo-2024-04-09, gpt-4-0613, gpt-3.5-turbo-0125
+class GPT(ModelWrapper):
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.client = OpenAI()
+    
+    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+        """Generates model output using OpenAI's API"""
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            max_tokens=max_new_tokens,
+            n=1,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content.strip()
+
+
+class DashScope(ModelWrapper):
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.client = OpenAI(api_key=os.environ["DASHSCOPE_API_KEY"], base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+
+    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_new_tokens,
+            n=1,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content.strip()
+
+
+class GeminiModel(ModelWrapper):
+    """Wrapper for Google Gemini models."""
+
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+        self.client = genai.GenerativeModel(self.model_name)
+
+
+    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+        """Generates model output using the Gemini API."""
+        generation_config = genai.types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_new_tokens
+        )
+        response = self.client.generate_content(
+            prompt,
+            generation_config=generation_config,
+        )
+
+        return response.text.strip()
+
+
+class TogetherModel(ModelWrapper):
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.client = Together(api_key=os.environ["TOGETHER_API_KEY"])
+
+    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+        """Generates model output using the TogetherAI API."""
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[{"role": "user", "content": prompt}],
+            )
+        return response.choices[0].message.content
+
+
+class ClaudeModel(ModelWrapper):
+    """Wrapper for Anthropic Claude models."""
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.client = Anthropic()
+
+    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+        """Generates model output using the Anthropic Messages API."""
+
+        message = self.client.messages.create(
+            model=self.model_name,
+            max_tokens=max_new_tokens,
+            temperature=temperature,
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ]
+        )
+        return message.content[0].text.strip()
+
+
+# TODO: fix me
+def load_model(model_name: str) -> ModelWrapper:
+    if "gpt" in model_name:
+        available_models = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o-2024-05-13", "gpt-4-turbo-2024-04-09", "gpt-4-0613", "gpt-3.5-turbo-0125"]
+        if model_name not in available_models:
+            raise ValueError(f"Model {model_name} not implemented!")
+        return GPT(model_name)
+    elif "gemini" in model_name:
+        available_models = ["gemini-1.5-pro", "gemini-1.5-flash"]
+        if model_name not in available_models:
+            raise ValueError(f"Model {model_name} not implemented!")
+        return GeminiModel(model_name)
+    else:
+        raise ValueError(f"Model {model_name} not implemented!")
+
+
+if __name__ == "__main__":
+    model_name = "gemini-1.5-flash"
+    model = load_model(model_name)
+    response = model.invoke("What is the capital of France?")
+    print(response)
