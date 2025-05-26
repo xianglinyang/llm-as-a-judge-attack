@@ -8,6 +8,7 @@ import logging
 import heapq
 import numpy as np
 
+from src.evolve_agent import EvolveAgent
 from src.llm_zoo import load_model
 from src.llm_evaluator import JudgeModel
 from src.utils import str2json
@@ -74,14 +75,18 @@ Output a list of {N} modified responses.
 ```
 """
 
-class EvolveAgent:
+class BaselineEvolveAgent(EvolveAgent):
     '''
     Evolve the response by modifying the style and tone of the response.
     '''
     def __init__(self, evolve_model_name: str, llm_evaluator: JudgeModel):
+        super().__init__()
         self.evolve_model_name = evolve_model_name
         self.evolve_model = load_model(evolve_model_name)
         self.llm_evaluator = llm_evaluator
+    
+    def train_policy(self):
+        raise NotImplementedError("BaselineEvolveAgent does not implement train_policy.")
     
     def select_best(self, curr_s, new_scores):
         '''
@@ -95,7 +100,7 @@ class EvolveAgent:
         else:
             return -1
     
-    def evolve(self, question: str, init_response: str, budget: int = 10, N: int = 10, pool_size: int = 5, strategy: str = ""):
+    def test_policy(self, question: str, init_response: str, budget: int = 10, N: int = 10, pool_size: int = 5, strategy: str = ""):
         '''
         1. choose the best or with prob
         2. whether to have a strategy agent
@@ -146,7 +151,7 @@ class EvolveAgent:
 if __name__ == "__main__":
     evolve_model_name = "gpt-4.1-mini"
     llm_evaluator = JudgeModel(model_name="gpt-4o")
-    evolve_agent = EvolveAgent(evolve_model_name, llm_evaluator)
+    evolve_agent = BaselineEvolveAgent(evolve_model_name, llm_evaluator)
 
     strategy = "1. length, 2. positive tone, 3. more emojis, 4. authority endorsement, 5. bandwagon"
 
