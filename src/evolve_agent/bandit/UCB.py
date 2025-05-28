@@ -1,6 +1,9 @@
 import numpy as np
 import random
 import pickle
+import json
+import os
+from tqdm import tqdm
 
 from src.evolve_agent import EvolveAgent
 from src.evolve_agent.bandit.config import strategy_list, STRATEGY_PROMPT, TEST_STRATEGY_PROMPT
@@ -10,7 +13,7 @@ from src.llm_zoo import ModelWrapper, load_model
 from src.utils import str2json
 
 class ContextualLinUCBAgent(EvolveAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, alpha: float = 1.0, lambda_reg: float = 1.0):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, alpha: float = 1.0, lambda_reg: float = 1.0):
         """
         Initializes the LinUCB agent.
 
@@ -33,16 +36,17 @@ class ContextualLinUCBAgent(EvolveAgent):
         self.llm_evaluator = llm_evaluator
         self.embedding_model = embedding_model
         self.llm_agent = llm_agent
+        self.init_model_name = init_model_name
 
         self.init_policy()
     
     def save_policy(self):
-        with open("policy.pkl", "wb") as f:
+        with open(f"policy_{self.llm_evaluator.model_name}_{self.llm_agent.model_name}.pkl", "wb") as f:
             pickle.dump(self.A, f)
             pickle.dump(self.b, f)
     
     def load_policy(self):
-        with open("policy.pkl", "rb") as f:
+        with open(f"policy_{self.llm_evaluator.model_name}_{self.llm_agent.model_name}.pkl", "rb") as f:
             self.A = pickle.load(f)
             self.b = pickle.load(f)
     
@@ -142,7 +146,7 @@ class ContextualLinUCBAgent(EvolveAgent):
     def train_policy(self, datasets, T: int):
         context_list = []
         history_policy_distribution = []
-        for question, response in datasets:
+        for question, response, _ in datasets:
             print(f"Question: {question}")
             print(f"Response: {response}")
             s, e = self.llm_evaluator.pointwise_score(question, response)
@@ -169,6 +173,11 @@ class ContextualLinUCBAgent(EvolveAgent):
                                             feedback=explanation,
                                             score=original_score,
                                             )
+            # prompt = TEST_STRATEGY_PROMPT.format(question=question, 
+            #                                     response=response, 
+            #                                     N=1, 
+            #                                     strategy=strategy_list[chosen_arm],
+            #                                     )
             
             new_response = self.llm_agent.invoke(prompt)
             new_response = str2json(new_response)[0]
@@ -243,44 +252,142 @@ class ContextualLinUCBAgent(EvolveAgent):
 #         """
 #         super().__init__()
 #         self.n_arms = len(strategy_list) # number of arms
+categories = [
+    "Computer Science & Programming",
+    "Mathematics & Statistics",
+    "Science & Engineering",
+    "Business & Finance",
+    "Writing & Communication",
+    "Social & Daily Life",
+    "Others"
+]
 
+def prepare_dataset(train_num, test_num):
 
-
-if __name__ == "__main__":
     # Data stream for training
-    path = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data/data/human_written/moss_oasst_lima_Llama_Factory.json"
+    path = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data/UltraFeedback/UltraFeedback_category.json"
 
     import json
-
     with open(path, 'r') as f:
         data = json.load(f)
 
-    dataset = [
-        (item["instruction"], item["output"])
-        for item in data[:100]
-    ]
-    n_features = 384
-    llm_agent = load_model("gpt-4o-mini")
-    embedding_model = MiniLMTextEncoder()
-    llm_evaluator = JudgeModel("gemini-1.5-flash")
-    alpha = 1.0
-    lambda_reg = 1.0
+    # prepare dataset
+    dataset = []
+    for item in data:
+        try:
+            question = item["question"]
+            category = item["categorization"]["question category"]
+            if category in categories:
+                dataset.append((question, category))
+        except:
+            continue
+    
+    # split dataset into train and test
+    idxs = np.random.choice(len(dataset), size=train_num+test_num, replace=False)
+    train_dataset = [dataset[i] for i in idxs[:train_num]]
+    test_dataset = [dataset[i] for i in idxs[train_num:]]
+    return train_dataset, test_dataset
 
-    agent = ContextualLinUCBAgent(n_features, llm_agent, embedding_model, llm_evaluator, alpha, lambda_reg)
-    # agent.train_policy(dataset, 100)
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--train_num", type=int, default=2)
+    parser.add_argument("--test_num", type=int, default=1)
+    parser.add_argument("--train_T", type=int, default=2)
+    parser.add_argument("--eval_T", type=int, default=10)
+    parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
+    parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--init_answer_model_name", type=str, default="mistralai/Mistral-7B-Instruct-v0.2")
+    parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--lambda_reg", type=float, default=1.0)
+    parser.add_argument("--n_features", type=int, default=384)
+    parser.add_argument("--save_path", type=str, default="output/")
+    parser.add_argument("--test_mode", type=str, default="policy", choices=["random", "policy"])
+
+    args = parser.parse_args()
+
+    train_num = args.train_num
+    test_num = args.test_num
+
+    n_features = args.n_features
+    llm_agent = load_model(args.llm_agent_name)
+    embedding_model = MiniLMTextEncoder()
+    judge_model_name = args.judge_model_name
+    llm_evaluator = JudgeModel(judge_model_name)
+    alpha = args.alpha
+    lambda_reg = args.lambda_reg
+
+    train_T = args.train_T
+    eval_T = args.eval_T
+
+    train_dataset, test_dataset = prepare_dataset(train_num, test_num)
+
+    init_answer_model_name = args.init_answer_model_name
+    init_answer_model = load_model(init_answer_model_name)
+
+    new_train_dataset = []
+    for question, category in train_dataset:
+        answer = init_answer_model.invoke(question)
+        new_train_dataset.append((question, answer, category))
+    
+    new_test_dataset = []
+    for question, category in test_dataset:
+        answer = init_answer_model.invoke(question)
+        new_test_dataset.append((question, answer, category))
+
+    agent = ContextualLinUCBAgent(n_features, llm_agent, embedding_model, llm_evaluator, init_answer_model_name, alpha, lambda_reg)
+    
+    if args.test_mode == "policy":
+        agent.train_policy(new_train_dataset, train_T)
 
     # Test the policy
-
-    for item in data[101:121]:
-        question = item["instruction"]
-        response = item["output"]
-        new_response = agent.test_random_policy(question, response, 10)
-        print(new_response)
+    test_results = []
+    for question, response, category in new_test_dataset:
+        if args.test_mode == "policy":
+            new_response = agent.test_policy(question, response, eval_T)
+        elif args.test_mode == "random":
+            new_response = agent.test_random_policy(question, response, eval_T)
+        else:
+            raise ValueError(f"Invalid test mode: {args.test_mode}")
 
         # Evaluate the policy
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         new_score, new_explanation = llm_evaluator.pointwise_score(question, new_response)
         print(f"Original score: {original_score}, explanation: {original_explanation}")
         print(f"New score: {new_score}, explanation: {new_explanation}")
+        test_results.append((question, response, category, original_score, original_explanation, new_score, new_explanation))
         print("--------------------------------")
+    
+    # save the test results
+    with open(os.path.join(args.save_path, f"{args.test_mode}_{judge_model_name}_{llm_agent.model_name}_{init_answer_model_name}_test_results.json"), "w") as f:
+        json.dump(test_results, f)
+
+    analysis = {}
+    # Analyze the test result for each category
+    for category in categories:
+        category_results = [result for result in test_results if result[2] == category]
+        print(f"Category: {category}")
+        print(f"Number of results: {len(category_results)}")
+        up_num = len([result for result in category_results if result[4] < result[6]])
+        down_num = len([result for result in category_results if result[4] > result[6]])
+        tie_num = len([result for result in category_results if result[4] == result[6]])
+        print(f"Number of up results: {up_num}")
+        print(f"Number of down results: {down_num}")
+        print(f"Number of tie results: {tie_num}")
+        # print(f"Average score: {np.mean([result[4] for result in category_results])}")
+        # print(f"Average new score: {np.mean([result[6] for result in category_results])}")
+        # print(f"Average improvement: {np.mean([result[6] - result[4] for result in category_results if result[4] < result[6]])}")
+        print("--------------------------------")
+        analysis[category] = {
+            "up_num": up_num,
+            "down_num": down_num,
+            "tie_num": tie_num,
+            # "average_score": np.mean([result[4] for result in category_results]),
+            # "average_new_score": np.mean([result[6] for result in category_results]),
+        }
+    
+    # save the analysis
+    with open(os.path.join(args.save_path, f"{args.test_mode}_{judge_model_name}_{llm_agent.model_name}_{init_answer_model_name}_analysis.json"), "w") as f:
+        json.dump(analysis, f)
         
