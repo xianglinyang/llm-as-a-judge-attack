@@ -4,6 +4,8 @@ from abc import ABC, abstractmethod
 import torch
 import os
 
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
 from openai import OpenAI
 from together import Together
 import google.generativeai as genai
@@ -19,16 +21,49 @@ class ModelWrapper(ABC):
 
 # HuggingFace models
 class HuggingFaceModel(ModelWrapper):
-    def __init__(self, model_name: str, device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16):
+    def __init__(self, model_name, torch_dtype=torch.bfloat16, device="cuda"):
         super().__init__(model_name)
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch_dtype).to(device)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        self.model_name_or_path=model_name
+        self.torch_dtype=torch_dtype
+        self.device=device
+        self._load_tokenizer()
+        self._load_model()
 
-    def invoke(self, prompt: str, max_new_tokens: int = 2048) -> str:
-        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.model.device)
-        outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens)
-        # only decode the output tokens
-        return self.tokenizer.decode(outputs[0][len(inputs["input_ids"][0]):], skip_special_tokens=True)
+    def _load_tokenizer(self):
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model_name_or_path)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.add_special_tokens({"pad_token": "<pad>"})
+        # Set padding side to left for decoder-only models
+            # Setting `pad_token_id` to `eos_token_id`:2 for open-end generation.
+            self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+        self.tokenizer.padding_side = "left"
+
+    def _load_model(self):
+        self.model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=self.model_name_or_path, torch_dtype=self.torch_dtype, device_map=self.device)
+        print("model loaded")
+
+    def invoke(self, prompt, max_new_tokens=2048, temperature=0.1, verbose=False):
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+        
+        # 3: Tokenize the chat (This can be combined with the previous step using tokenize=True)
+        inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
+        # Move the tokenized inputs to the same device the model is on (GPU/CPU)
+        inputs = {key: tensor.to(self.model.device) for key, tensor in inputs.items()}
+        if verbose: print("Tokenized inputs:\n", inputs)
+        
+        # 4: Generate text from the model
+        outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
+        if verbose: print("Generated tokens:\n", outputs)
+
+        # 5: Decode the output back to a string
+        decoded_output = self.tokenizer.decode(outputs[0][inputs['input_ids'].size(1):], skip_special_tokens=True)
+        if verbose: print("Decoded output:\n", decoded_output)
+        
+        return decoded_output
 
 
 # vllm models
@@ -154,6 +189,8 @@ def load_model(model_name: str) -> ModelWrapper:
         if model_name not in available_models:
             raise ValueError(f"Model {model_name} not implemented!")
         return GeminiModel(model_name)
+    elif "/" in model_name:
+        return HuggingFaceModel(model_name)
     else:
         raise ValueError(f"Model {model_name} not implemented!")
 
