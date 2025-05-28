@@ -39,6 +39,7 @@ class JudgeModel:
         except:
             score = -1
             feedback = "Error: Failed to parse the response as a JSON object."
+            print(f"Error: Failed to parse the response as a JSON object. {response}")
         return score, feedback
 
 
