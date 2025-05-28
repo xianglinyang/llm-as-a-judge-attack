@@ -17,9 +17,11 @@ class XLMROBERTaTextEncoder(TextEncoder):
         self.model = AutoModelForMaskedLM.from_pretrained(self.model_name)
     
     def encode(self, text: str):
+        # TODO still not sure if this is correct
         inputs = self.tokenizer(text, return_tensors="pt")
         outputs = self.model(**inputs)
-        return outputs
+        embedding = outputs.logits[0, -1, :]
+        return embedding
     
 
 class MiniLMTextEncoder(TextEncoder):
@@ -37,4 +39,7 @@ class MiniLMTextEncoder(TextEncoder):
         return self.model.encode(texts)
     
     
-    
+if __name__ == "__main__":
+    text_encoder = MiniLMTextEncoder()
+    # text_encoder = XLMROBERTaTextEncoder()
+    print(text_encoder.encode("Hello, world!").shape)
