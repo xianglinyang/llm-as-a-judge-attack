@@ -5,7 +5,7 @@
 3. TS with Bayesian Neural Network
 '''
 
-strategy_list = ["length", "positive tone", "more emojis", "authority endorsement", "bandwagon"]
+strategy_list = ["length", "positive tone", "more emojis", "authority endorsement", "bandwagon", "no change"]
 MAB_STRATEGY_LIST = ["UCB", "TS", "Epsilon-Greedy"]
 
 
