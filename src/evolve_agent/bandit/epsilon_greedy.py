@@ -8,7 +8,7 @@ import os
 import json
 
 from src.evolve_agent import EvolveAgent
-from src.evolve_agent.bandit.config import strategy_list, STRATEGY_PROMPT, TEST_STRATEGY_PROMPT
+from src.evolve_agent.bandit.config import strategy_list, STRATEGY_PROMPT
 from src.llm_evaluator import JudgeModel
 from src.text_encoder import TextEncoder, MiniLMTextEncoder
 from src.llm_zoo import ModelWrapper, load_model
@@ -18,8 +18,8 @@ from src.logging_utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
-class ContextualLinUCBAgent(EvolveAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, alpha: float = 1.0, lambda_reg: float = 1.0):
+class ContextualLinEpsilonGreedyAgent(EvolveAgent):
+    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, alpha: float = 1.0, lambda_reg: float = 1.0):
         """
         Initializes the LinUCB agent.
 
@@ -34,6 +34,7 @@ class ContextualLinUCBAgent(EvolveAgent):
         """
         super().__init__()
 
+        self.epsilon = epsilon
         self.n_arms = len(strategy_list) # number of arms
         self.strategy_list = strategy_list
         self.n_features = n_features
@@ -75,11 +76,7 @@ class ContextualLinUCBAgent(EvolveAgent):
             # Expected reward part: x^T * theta_hat_a
             expected_reward = context_x.T @ theta_hat_a # (1 x d) @ (d x 1) = (1 x 1)
 
-            # Exploration bonus part: alpha * sqrt(x^T * A_a_inv * x)
-            uncertainty_term = context_x.T @ A_a_inv @ context_x # (1 x d) @ (d x d) @ (d x 1) = (1 x 1)
-            exploration_bonus = self.alpha * np.sqrt(uncertainty_term)
-
-            p_ta_values[arm_idx] = expected_reward + exploration_bonus
+            p_ta_values[arm_idx] = expected_reward
 
         return p_ta_values
      
@@ -93,8 +90,12 @@ class ContextualLinUCBAgent(EvolveAgent):
         Returns:
             int: The index of the chosen arm.
         """
-        ucb_scores = self.predict(context_x)
-        chosen_arm_idx = np.argmax(ucb_scores)
+        prob = np.random.rand()
+        if prob<self.epsilon:
+            chosen_arm_idx = random.choice(range(self.n_arms))
+        else:
+            scores = self.predict(context_x)
+            chosen_arm_idx = np.argmax(scores)
         return chosen_arm_idx
 
     def update(self, chosen_arm_idx, context_x, reward):
@@ -210,11 +211,11 @@ class ContextualLinUCBAgent(EvolveAgent):
                 heapq.heappop(pool)
             
             # 6. log for evaluation
-            print(f"Iteration {t}:")
-            print(f"Original score: {-curr_s}, explanation: {curr_e}")
-            print(f"New score: {new_score}, explanation: {new_explanation}")
-            print(f"Chosen arm: {strategy_list[chosen_arm]}")
-            print(f"New response: {new_response}\n")
+            logger.info(f"Iteration {t}:")
+            logger.info(f"Original score: {-curr_s}, explanation: {curr_e}")
+            logger.info(f"New score: {new_score}, explanation: {new_explanation}")
+            logger.info(f"Chosen arm: {strategy_list[chosen_arm]}")
+            logger.info(f"New response: {new_response}\n")
 
         return pool[0]
     
@@ -266,6 +267,9 @@ class ContextualLinUCBAgent(EvolveAgent):
 
 
 
+# class ContextualNeuralUCBAgent(EvolveAgent):
+
+
 categories = [
     "Computer Science & Programming",
     "Mathematics & Statistics",
@@ -294,6 +298,7 @@ if __name__ == "__main__":
     parser.add_argument("--response_model_name", type=str, default="human_written")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
     parser.add_argument("--eval_num", type=int, default=10)
+    parser.add_argument("--epsilon", type=float, default=0.1)
 
     args = parser.parse_args()
 
@@ -308,6 +313,7 @@ if __name__ == "__main__":
     alpha = args.alpha
     lambda_reg = args.lambda_reg
     eval_num = args.eval_num
+    epsilon = args.epsilon
 
     budget = args.Budget
     pool_size = args.pool_size
@@ -337,7 +343,7 @@ if __name__ == "__main__":
         logger.info(f"Question {idx}: {question}")
         logger.info(f"Response {idx}: {response}")
 
-        agent = ContextualLinUCBAgent(n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, alpha, lambda_reg)
+        agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, alpha, lambda_reg)
 
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
@@ -367,7 +373,8 @@ if __name__ == "__main__":
 
     # record the evaluation results
     analysis = {
-        "strategy": "UCB",
+        "strategy": "Epsilon Greedy",
+        "epsilon": epsilon,
         "dataset_name": dataset_name,
         "response_model_name": response_model_name,
         "test_mode": args.test_mode,
