@@ -6,11 +6,12 @@ import os
 import time
 from typing import List
 import logging
+import asyncio
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from vllm import LLM, SamplingParams
 
-from openai import OpenAI
+from openai import OpenAI, AsyncOpenAI
 from together import Together
 import google.generativeai as genai
 from anthropic import Anthropic
@@ -23,6 +24,10 @@ class ModelWrapper(ABC):
 
     @abstractmethod
     def invoke(self, prompt: str) -> str:
+        pass
+
+    @abstractmethod
+    def batch_invoke(self, prompts: List[str]) -> str:
         pass
 
 # HuggingFace models
@@ -71,10 +76,17 @@ class HuggingFaceModel(ModelWrapper):
         if verbose: logger.info("Decoded output:\n", decoded_output)
         
         return decoded_output
+    
+    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7, verbose=False):
+        responses = list()
+        for prompt in prompts:
+            response = self.invoke(prompt, max_new_tokens, temperature, verbose)
+            responses.append(response)
+        return responses
 
 # vllm models
 class VLLMModel(ModelWrapper):
-    def __init__(self, model_name: str, device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16, tensor_parallel_size: int = 1, gpu_memory_utilization: float = 0.90):
+    def __init__(self, model_name: str, device: str = "cuda", torch_dtype: torch.dtype = torch.bfloat16, tensor_parallel_size: int = 1, gpu_memory_utilization: float = 0.95):
         '''
         Args:
             model_name: str, the name of the model
@@ -168,10 +180,11 @@ class VLLMModel(ModelWrapper):
 # API based models
 
 # gpt-4o-2024-05-13, gpt-4-turbo-2024-04-09, gpt-4-0613, gpt-3.5-turbo-0125
-class GPT(ModelWrapper):
+class OpenAIModel(ModelWrapper):
     def __init__(self, model_name: str):
         super().__init__(model_name)
         self.client = OpenAI()
+        self.async_client = AsyncOpenAI()
     
     def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
         """Generates model output using OpenAI's API"""
@@ -187,6 +200,34 @@ class GPT(ModelWrapper):
             temperature=temperature,
         )
         return response.choices[0].message.content.strip()
+    
+    async def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+
+        async def get_completion(prompt_content: str):
+            """
+            Asynchronously gets a completion from the OpenAI API.
+            """
+            try:
+                response = await self.async_client.chat.completions.create(
+                    model=self.model_name,
+                    messages=[
+                        {"role": "user", "content": prompt_content}
+                    ],
+                    max_tokens=max_new_tokens,
+                    n=1,
+                    temperature=temperature,
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                print(f"An error occurred for prompt '{prompt_content}': {e}")
+                return None # Or handle error more gracefully
+
+        """
+        Processes a list of prompts concurrently using AsyncOpenAI.
+        """
+        tasks = [get_completion(prompt) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=False) # Set return_exceptions=True to get exceptions instead of None
+        return results
 
 
 class DashScope(ModelWrapper):
@@ -203,6 +244,13 @@ class DashScope(ModelWrapper):
             temperature=temperature,
         )
         return response.choices[0].message.content.strip()
+    
+    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+        responses = list()
+        for prompt in prompts:
+            response = self.invoke(prompt, max_new_tokens, temperature)
+            responses.append(response)
+        return responses
 
 
 class GeminiModel(ModelWrapper):
@@ -226,6 +274,13 @@ class GeminiModel(ModelWrapper):
         )
 
         return response.text.strip()
+    
+    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+        responses = list()
+        for prompt in prompts:
+            response = self.invoke(prompt, max_new_tokens, temperature)
+            responses.append(response)
+        return responses
 
 
 class TogetherModel(ModelWrapper):
@@ -240,7 +295,13 @@ class TogetherModel(ModelWrapper):
             messages=[{"role": "user", "content": prompt}],
             )
         return response.choices[0].message.content
-
+    
+    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+        responses = list()
+        for prompt in prompts:
+            response = self.invoke(prompt, max_new_tokens, temperature)
+            responses.append(response)
+        return responses
 
 class ClaudeModel(ModelWrapper):
     """Wrapper for Anthropic Claude models."""
@@ -263,22 +324,32 @@ class ClaudeModel(ModelWrapper):
             ]
         )
         return message.content[0].text.strip()
+    
+    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+        responses = list()
+        for prompt in prompts:
+            response = self.invoke(prompt, max_new_tokens, temperature)
+            responses.append(response)
+        return responses
 
 
 # TODO: fix me
-def load_model(model_name: str) -> ModelWrapper:
+def load_model(model_name: str, use_vllm: bool = False, **kwargs) -> ModelWrapper:
     if "gpt" in model_name:
         available_models = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o-2024-05-13", "gpt-4-turbo-2024-04-09", "gpt-4-0613", "gpt-3.5-turbo-0125"]
         if model_name not in available_models:
             raise ValueError(f"Model {model_name} not implemented!")
-        return GPT(model_name)
+        return OpenAIModel(model_name, **kwargs)
     elif "gemini" in model_name:
         available_models = ["gemini-1.5-pro", "gemini-1.5-flash"]
         if model_name not in available_models:
             raise ValueError(f"Model {model_name} not implemented!")
-        return GeminiModel(model_name)
+        return GeminiModel(model_name, **kwargs)
     elif "/" in model_name:
-        return HuggingFaceModel(model_name)
+        if use_vllm:
+            return VLLMModel(model_name, **kwargs)
+        else:
+            return HuggingFaceModel(model_name, **kwargs)
     else:
         raise ValueError(f"Model {model_name} not implemented!")
 
@@ -291,6 +362,6 @@ if __name__ == "__main__":
 
     # Test vllm model
     model_name = "mistralai/Mistral-7B-Instruct-v0.2"
-    model = VLLMModel(model_name)
+    model = load_model(model_name, use_vllm=True)
     response = model.invoke("What is the capital of France?")
     print(response)
