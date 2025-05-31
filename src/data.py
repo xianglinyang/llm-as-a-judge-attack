@@ -199,44 +199,44 @@ if __name__ == "__main__":
         # "google/gemma-3-12b-it",
         # "google/gemma-3-27b-it",
         # "mistralai/Mixtral-7B-Instruct-v0.2",
-        "mistralai/Mixtral-8x7B-Instruct-v0.1"
+        # "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    ]
+
+    # dataset_name = "AlpacaEval"
+    # for model_name in model_name_list:
+    #     get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+
+    # dataset_name = "ArenaHard"
+    # for model_name in model_name_list:
+    #     get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+
+    # dataset_name = "MTBench"
+    # for model_name in model_name_list:
+    #     get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+
+    model_name_list = [
+        "gpt-4o-mini",
+        # "gpt-4o",
+        # "gpt-4.1",
+        # "gpt-4.1-mini",
+        # "gpt-4o-2024-05-13",
+        # "gpt-4-turbo-2024-04-09",
+        # "gpt-4-0613",
+        # "gemini-1.5-pro",
+        # "gemini-1.5-flash"
     ]
 
     dataset_name = "AlpacaEval"
     for model_name in model_name_list:
-        get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+        get_response_from_model(save_dir, dataset_name, model_name)
 
     dataset_name = "ArenaHard"
     for model_name in model_name_list:
-        get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+        get_response_from_model(save_dir, dataset_name, model_name)
 
     dataset_name = "MTBench"
     for model_name in model_name_list:
-        get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
-
-    # model_name_list = [
-    #     "gpt-4o-mini",
-    #     "gpt-4o",
-    #     "gpt-4.1",
-    #     "gpt-4.1-mini",
-    #     "gpt-4o-2024-05-13",
-    #     "gpt-4-turbo-2024-04-09",
-    #     "gpt-4-0613",
-    #     "gemini-1.5-pro",
-    #     "gemini-1.5-flash"
-    # ]
-
-    # dataset_name = "AlpacaEval"
-    # for model_name in model_name_list:
-    #     get_response_from_model(save_dir, dataset_name, model_name)
-
-    # dataset_name = "ArenaHard"
-    # for model_name in model_name_list:
-    #     get_response_from_model(save_dir, dataset_name, model_name)
-
-    # dataset_name = "MTBench"
-    # for model_name in model_name_list:
-    #     get_response_from_model(save_dir, dataset_name, model_name)
+        get_response_from_model(save_dir, dataset_name, model_name)
     
     
     
