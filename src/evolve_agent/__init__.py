@@ -18,11 +18,7 @@ class EvolveAgent(ABC):
         self.evolve_strategy = "ABCStrategy"
     
     @abstractmethod
-    def train_policy(self):
-        pass
-    
-    @abstractmethod
-    def test_policy(self):
+    def explore(self):
         pass
 
     
