@@ -83,13 +83,36 @@ def get_response_from_model(save_dir, dataset_name, response_model_name, **kwarg
     return new_dataset
 
 def load_dataset(save_dir, dataset_name, response_model_name):
+    metadata_path = os.path.join(save_dir, dataset_name, f"metadata.json")
     save_path = os.path.join(save_dir, dataset_name, f"{response_model_name}.json")
-    try:    
+    if not os.path.exists(save_path):
+        raise ValueError(f"Dataset {dataset_name} with response model {response_model_name} not found")
+    
+    try:
+        with open(metadata_path, 'r') as f:
+            metadata = json.load(f)
+    except:
+        raise ValueError(f"Metadata {metadata_path} not found")
+    
+    try:
         with open(save_path, 'r') as f:
             data = json.load(f)
-    except:
+    except Exception as e:
         raise ValueError(f"Dataset {dataset_name} with response model {response_model_name} not found")
-    return data
+    
+    # merge the metadata and data based on instruction field
+    # TODO: optimize the merge process with dict structure
+    new_dataset = []
+    for item in metadata:
+        for data_item in data:
+            if item["instruction"] == data_item["instruction"]:
+                new_item = item.copy()
+                new_item.update(data_item)
+                new_dataset.append(new_item)
+                break
+        else:
+            new_dataset.append(item)
+    return new_dataset
 
 template='''Given a question, please categorize it to one of the following categories:
 
