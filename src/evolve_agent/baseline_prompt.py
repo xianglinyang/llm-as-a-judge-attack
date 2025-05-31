@@ -85,9 +85,6 @@ class BaselineEvolveAgent(EvolveAgent):
         self.evolve_model = load_model(evolve_model_name)
         self.llm_evaluator = llm_evaluator
     
-    def train_policy(self):
-        raise NotImplementedError("BaselineEvolveAgent does not implement train_policy.")
-    
     def select_best(self, curr_s, new_scores):
         '''
         1. choose the best
@@ -100,7 +97,7 @@ class BaselineEvolveAgent(EvolveAgent):
         else:
             return -1
     
-    def test_policy(self, question: str, init_response: str, budget: int = 10, N: int = 10, pool_size: int = 5, strategy: str = ""):
+    def explore(self, question: str, init_response: str, budget: int = 10, N: int = 10, pool_size: int = 5, strategy: str = ""):
         '''
         1. choose the best or with prob
         2. whether to have a strategy agent
