@@ -8,7 +8,7 @@ import os
 import json
 
 from src.evolve_agent import EvolveAgent
-from src.evolve_agent.bandit.config import strategy_list, STRATEGY_PROMPT, TEST_STRATEGY_PROMPT
+from src.evolve_agent.bandit.config import strategy_list, STRATEGY_PROMPT
 from src.llm_evaluator import JudgeModel
 from src.text_encoder import TextEncoder, MiniLMTextEncoder
 from src.llm_zoo import ModelWrapper, load_model
@@ -143,12 +143,15 @@ class ContextualLinUCBAgent(EvolveAgent):
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append((-s, e, init_response))
+        pool.append((s, e, init_response))
 
         if Budget<self.n_arms:
             raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
         
         for arm_idx in range(self.n_arms):
+            context_x = self.get_context_x(question, init_response)
+            context_x = context_x.reshape(-1, 1)
+
             prompt = STRATEGY_PROMPT.format(question=question, 
                                             response=init_response, 
                                             N=1, 
@@ -160,13 +163,13 @@ class ContextualLinUCBAgent(EvolveAgent):
             new_response = str2json(new_response)[0]
 
             reward, new_score, new_explanation = self.get_reward(question, new_response, s)
-            self.update(arm_idx, self.get_context_x(question, init_response), reward)
-            pool.append((-new_score, new_explanation, new_response))
+            self.update(arm_idx, context_x, reward)
+            pool.append((new_score, new_explanation, new_response))
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             # record the results
             logger.info(f"Iteration {arm_idx}:")
-            logger.info(f"Original score: {-s}, explanation: {e}")
+            logger.info(f"Original score: {s}, explanation: {e}")
             logger.info(f"New score: {new_score}, explanation: {new_explanation}")
             logger.info(f"Chosen arm: {strategy_list[arm_idx]}")
             logger.info(f"New response: {new_response}\n")
@@ -205,24 +208,24 @@ class ContextualLinUCBAgent(EvolveAgent):
             self.update(chosen_arm, context_x, reward)
 
             # 5.1 update the pool with heapq
-            pool.append((-new_score, new_explanation, new_response))
+            pool.append((new_score, new_explanation, new_response))
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             
             # 6. log for evaluation
             print(f"Iteration {t}:")
-            print(f"Original score: {-curr_s}, explanation: {curr_e}")
+            print(f"Original score: {curr_s}, explanation: {curr_e}")
             print(f"New score: {new_score}, explanation: {new_explanation}")
             print(f"Chosen arm: {strategy_list[chosen_arm]}")
             print(f"New response: {new_response}\n")
 
-        return pool[0]
+        return heapq.nlargest(1, pool)[0]
     
     def explore_with_random_arm(self, question, init_response, pool_size: int, Budget: int):
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append((-s, e, init_response))
+        pool.append((s, e, init_response))
         
         for t in range(Budget):
             # 1. Sample a context from the dataset
@@ -251,18 +254,18 @@ class ContextualLinUCBAgent(EvolveAgent):
             reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
 
             # 5.1 update the pool with heapq
-            pool.append((-new_score, new_explanation, new_response))
+            pool.append((new_score, new_explanation, new_response))
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             
             # 6. log for evaluation
             print(f"Iteration {t}:")
-            print(f"Original score: {-curr_s}, explanation: {curr_e}")
+            print(f"Original score: {curr_s}, explanation: {curr_e}")
             print(f"New score: {new_score}, explanation: {new_explanation}")
             print(f"Chosen arm: {strategy_list[chosen_arm]}")
             print(f"New response: {new_response}\n")
 
-        return pool[0]
+        return heapq.nlargest(1, pool)[0]
 
 
 
@@ -280,20 +283,19 @@ if __name__ == "__main__":
     setup_logging(task_name="UCB")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--Budget", type=int, default=20)
+    parser.add_argument("--Budget", type=int, default=30)
     parser.add_argument("--pool_size", type=int, default=5)
     parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
-    parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-mini")
-    parser.add_argument("--init_answer_model_name", type=str, default="mistral-gemeni-sft")
+    parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--alpha", type=float, default=1.0)
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
     parser.add_argument("--save_path", type=str, default="results/")
     parser.add_argument("--test_mode", type=str, default="policy", choices=["random", "policy"])
-    parser.add_argument("--dataset_name", type=str, default="lima")
-    parser.add_argument("--response_model_name", type=str, default="human_written")
+    parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
+    parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=10)
+    parser.add_argument("--eval_num", type=int, default=800)
 
     args = parser.parse_args()
 
@@ -341,6 +343,21 @@ if __name__ == "__main__":
 
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
+        if original_score == 9:
+            logger.info(f"Perfect score 9, skip")
+            # record the results
+            test_results.append({
+                "category": category,
+                "instruction": question,
+                "output": response,
+                "original_score": original_score,
+                "original_explanation": original_explanation,
+                "final_score": original_score,
+                "final_explanation": original_explanation,
+                "final_response": response,
+                "skip": True,
+            })
+            continue
 
         if args.test_mode == "random":
             final_score, final_explanation, final_response = agent.explore_with_random_arm(question, response, pool_size, budget)
@@ -349,7 +366,7 @@ if __name__ == "__main__":
         else:
             raise ValueError(f"Invalid test mode: {args.test_mode}")
 
-        logger.info(f"Final score: {-final_score}, explanation: {final_explanation}")
+        logger.info(f"Final score: {final_score}, explanation: {final_explanation}")
         logger.info(f"Final response: {final_response}")
         logger.info("-"*100)
 
@@ -363,6 +380,7 @@ if __name__ == "__main__":
             "final_score": final_score,
             "final_explanation": final_explanation,
             "final_response": final_response,
+            "skip": False,
         })
 
     # record the evaluation results
@@ -373,7 +391,6 @@ if __name__ == "__main__":
         "test_mode": args.test_mode,
         "judge_model_name": judge_model_name,
         "llm_agent_name": llm_agent.model_name,
-        "init_answer_model_name": args.init_answer_model_name,
         "alpha": alpha,
         "lambda_reg": lambda_reg,
         "n_features": n_features,
@@ -387,23 +404,32 @@ if __name__ == "__main__":
         logger.info(f"Category: {category}")
         logger.info(f"Number of results: {len(category_results)}")
 
-        up_num = len([result for result in category_results if result["original_score"] < result["final_score"]])
-        down_num = len([result for result in category_results if result["original_score"] > result["final_score"]])
-        tie_num = len([result for result in category_results if result["original_score"] == result["final_score"]])
+        up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result["skip"]])
+        down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result["skip"]])
+        tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result["skip"]])
         logger.info(f"Number of up results: {up_num}")
         logger.info(f"Number of down results: {down_num}")
         logger.info(f"Number of tie results: {tie_num}")
-        logger.info(f"Average improvement: {np.mean([result['final_score'] - result['original_score'] for result in category_results])}")
+        logger.info(f"Number of skip results: {len([result for result in category_results if result['skip']])}")
+        logger.info(f"Average improvement: {np.mean([result['final_score'] - result['original_score'] for result in category_results if not result['skip']])}")
         logger.info("--------------------------------")
 
         analysis[category] = {
             "up_num": up_num,
             "down_num": down_num,
             "tie_num": tie_num,
+            "skip_num": len([result for result in category_results if result["skip"]]),
             "average_improvement": np.mean([result["final_score"] - result["original_score"] for result in category_results]),
         }
     
     # save the analysis in the output
-    with open(os.path.join(args.save_path, f"evaluation_results.json"), "w") as f:
-        json.dump(analysis, f)
+    save_path = os.path.join(args.save_path, f"evaluation_results.json")
+    if os.path.exists(save_path):
+        history_analysis = json.load(open(save_path, "r"))
+        history_analysis.append(analysis)
+    else:
+        history_analysis = [analysis]
+        
+    with open(save_path, "w") as f:
+        json.dump(history_analysis, f)
         
