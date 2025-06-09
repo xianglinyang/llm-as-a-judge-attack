@@ -19,7 +19,7 @@ from src.logging_utils import setup_logging
 logger = logging.getLogger(__name__)
 
 class ContextualThompsonSamplingAgent(EvolveAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, v_ts: float = 1.0, lambda_reg: float = 1.0):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, reward_type: str = "relative", v_ts: float = 1.0, lambda_reg: float = 1.0):
         """
         Initializes the Contextual Thompson Sampling agent.
 
@@ -29,6 +29,7 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
             embedding_model (TextEncoder): Model to get text embeddings.
             llm_evaluator (JudgeModel): LLM evaluator to evaluate the quality of the response.
             init_model_name (str): Name of the initial model being improved.
+            reward_type (str): Type of reward to use. "relative" or "absolute".
             v_ts (float): Thompson Sampling exploration scale factor.
                           Controls the variance of the sampled parameters.
                           Higher v_ts means more exploration.
@@ -47,6 +48,7 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
         self.embedding_model = embedding_model
         self.llm_agent = llm_agent
         self.init_model_name = init_model_name
+        self.reward_type = reward_type
 
         self.init_policy()
 
@@ -99,7 +101,6 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
                 logger.warning(f"LinAlgError sampling for arm {arm_idx}: {e}. Using mean theta_hat_a.")
                 theta_tilde_a = theta_hat_a
 
-
             # Expected reward using the sampled theta_tilde_a: x^T * theta_tilde_a
             sampled_rewards[arm_idx] = context_x.T @ theta_tilde_a # (1 x d) @ (d x 1) = (1 x 1)
 
@@ -144,7 +145,12 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
 
     def get_reward(self, question: str, response: str, original_score: float):
         s, e = self.llm_evaluator.pointwise_score(question, response)
-        reward = s - original_score # Relative improvement as reward
+        if self.reward_type == "relative":
+            reward = s - original_score # Relative improvement as reward
+        elif self.reward_type == "absolute":
+            reward = s # Absolute score as reward
+        else:
+            raise ValueError(f"Invalid reward type: {self.reward_type}")
         return reward, s, e
 
     def get_policy_distribution(self, context_x):
@@ -161,10 +167,6 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
             expected_reward = context_x.T @ theta_hat_a # (1 x d) @ (d x 1) = (1 x 1)
             policy_distribution.append(expected_reward.item()) # .item() to get scalar
         return policy_distribution
-
-    def show_history(self):
-        for policy_dist_snapshot in self.history_policy_distribution:
-            print(policy_dist_snapshot)
 
     def explore(self, question, init_response, pool_size: int, Budget: int):
         # init the response pool
@@ -236,18 +238,6 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
 
             # 2. Choose an arm using Thompson Sampling
             chosen_arm = self.choose_arm(context_x)
-            
-            # (Optional) Handle "no change" arm if it's the last one and means skip
-            # if chosen_arm == self.n_arms - 1 and self.strategy_list[chosen_arm].lower() == "no change":
-            #     logger.info(f"Iteration {t}: 'No change' arm chosen. Skipping LLM call.")
-            #     # Update with zero reward if it's an actual action, or don't update if it's truly a skip
-            #     self.update(chosen_arm, context_x, 0) # Assuming 0 reward for "no change"
-            #     # Add current state back to pool or do nothing if pool logic handles it
-            #     heapq.heappush(pool, (curr_s, curr_e, curr_r)) 
-            #     if len(pool) > pool_size:
-            #         heapq.heappop(pool)
-            #     continue
-
 
             # 3. Get new response using the chosen arm and current context (curr_r, curr_s, curr_e)
             prompt = STRATEGY_PROMPT.format(question=question,
@@ -264,7 +254,6 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
                 logger.error(f"Failed to parse LLM response for arm {self.strategy_list[chosen_arm]} in iter {t}: {new_response_list}. Error: {parse_ex}. Skipping update for this round.")
                 continue
 
-
             # 4. Get the reward (relative to the score of curr_r)
             reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
 
@@ -276,8 +265,6 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
             if len(pool) > pool_size:
                 heapq.heappop(pool)
 
-            # (Optional) Record policy distribution snapshot
-            # self.history_policy_distribution.append(self.get_policy_distribution(context_x))
 
             # 6. Log for evaluation
             logger.info(f"Iteration {t}:")
@@ -309,13 +296,6 @@ class ContextualThompsonSamplingAgent(EvolveAgent):
             curr_s, curr_e, curr_r = current_pool_list[idx]
 
             chosen_arm = random.choice(range(self.n_arms))
-            # Optional: Handle "no change" arm if necessary
-            # if chosen_arm == self.n_arms - 1 and self.strategy_list[chosen_arm].lower() == "no change":
-            #     logger.info(f"Random Iteration {t}: 'No change' arm chosen. Skipping LLM call.")
-            #     heapq.heappush(pool, (curr_s, curr_e, curr_r)) 
-            #     if len(pool) > pool_size:
-            #         heapq.heappop(pool)
-            #     continue
 
             prompt = STRATEGY_PROMPT.format(question=question,
                                             response=curr_r,
@@ -372,7 +352,6 @@ if __name__ == "__main__":
     parser.add_argument("--pool_size", type=int, default=2)
     parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
-    # parser.add_argument("--alpha", type=float, default=1.0) # Removed for TS
     parser.add_argument("--v_ts", type=float, default=1.0, help="Thompson Sampling exploration scale factor") # Added for TS
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
@@ -382,6 +361,7 @@ if __name__ == "__main__":
     parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data") # Adjusted default path
     parser.add_argument("--eval_num", type=int, default=10) # Reduced default for quicker testing
+    parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
 
     args = parser.parse_args()
 
@@ -396,6 +376,7 @@ if __name__ == "__main__":
     v_ts = args.v_ts # Use v_ts
     lambda_reg = args.lambda_reg
     eval_num = args.eval_num
+    reward_type = args.reward_type
 
     budget = args.Budget
     pool_size = args.pool_size
@@ -408,6 +389,7 @@ if __name__ == "__main__":
     logger.info(f"N features: {n_features}")
     logger.info(f"Data dir: {data_dir}")
     logger.info(f"Test mode: {args.test_mode}")
+    logger.info(f"Reward type: {reward_type}")
 
     dataset = load_dataset(data_dir, dataset_name, response_model_name)
     dataset_len = len(dataset)
@@ -433,7 +415,7 @@ if __name__ == "__main__":
         logger.info(f"Initial Response {idx}: {response}")
 
         # Instantiate Thompson Sampling Agent
-        agent = ContextualThompsonSamplingAgent(n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, v_ts, lambda_reg)
+        agent = ContextualThompsonSamplingAgent(n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, reward_type, v_ts, lambda_reg)
 
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
@@ -494,6 +476,7 @@ if __name__ == "__main__":
         "budget": budget,
         "pool_size": pool_size,
         "eval_num": eval_num,
+        "reward_type": reward_type,
     }
 
     # Filter out results where scores might be None due to errors

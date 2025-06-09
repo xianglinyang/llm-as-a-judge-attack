@@ -19,7 +19,7 @@ from src.logging_utils import setup_logging
 logger = logging.getLogger(__name__)
 
 class ContextualLinEpsilonGreedyAgent(EvolveAgent):
-    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, alpha: float = 1.0, lambda_reg: float = 1.0):
+    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, reward_type: str = "relative", alpha: float = 1.0, lambda_reg: float = 1.0):
         """
         Initializes the LinUCB agent.
 
@@ -44,6 +44,7 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
         self.embedding_model = embedding_model
         self.llm_agent = llm_agent
         self.init_model_name = init_model_name
+        self.reward_type = reward_type
 
         self.init_policy()
     
@@ -123,7 +124,12 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
     
     def get_reward(self, question: str, response: str, original_score: float):
         s, e = self.llm_evaluator.pointwise_score(question, response)
-        reward = s-original_score
+        if self.reward_type == "relative":
+            reward = s-original_score
+        elif self.reward_type == "absolute":
+            reward = s
+        else:
+            raise ValueError(f"Invalid reward type: {self.reward_type}")
         return reward, s, e
     
     def get_policy_distribution(self, context_x):
@@ -299,6 +305,7 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
     parser.add_argument("--eval_num", type=int, default=10)
     parser.add_argument("--epsilon", type=float, default=0.1)
+    parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
 
     args = parser.parse_args()
 
@@ -314,6 +321,7 @@ if __name__ == "__main__":
     lambda_reg = args.lambda_reg
     eval_num = args.eval_num
     epsilon = args.epsilon
+    reward_type = args.reward_type
 
     budget = args.Budget
     pool_size = args.pool_size
@@ -325,6 +333,7 @@ if __name__ == "__main__":
     logger.info(f"N features: {n_features}")
     logger.info(f"Data dir: {data_dir}")
     logger.info(f"Test mode: {args.test_mode}")
+    logger.info(f"Reward type: {reward_type}")
 
     dataset = load_dataset(data_dir, dataset_name, response_model_name)
     dataset_len = len(dataset)
@@ -387,6 +396,7 @@ if __name__ == "__main__":
         "budget": budget,
         "pool_size": pool_size,
         "eval_num": eval_num,
+        "reward_type": reward_type,
     }
     # Analyze the test result for each category
     for category in categories:
