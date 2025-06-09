@@ -19,7 +19,7 @@ from src.logging_utils import setup_logging
 logger = logging.getLogger(__name__)
 
 class ContextualLinEpsilonGreedyAgent(EvolveAgent):
-    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, reward_type: str = "relative", alpha: float = 1.0, lambda_reg: float = 1.0):
+    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, reward_type: str = "relative", lambda_reg: float = 1.0):
         """
         Initializes the LinUCB agent.
 
@@ -33,12 +33,11 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
                                 Corresponds to initializing A_a with lambda_reg * I.
         """
         super().__init__()
-
+        
         self.epsilon = epsilon
         self.n_arms = len(strategy_list) # number of arms
         self.strategy_list = strategy_list
         self.n_features = n_features
-        self.alpha = alpha
         self.lambda_reg = lambda_reg
         self.llm_evaluator = llm_evaluator
         self.embedding_model = embedding_model
@@ -57,7 +56,7 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
 
     def predict(self, context_x):
         """
-        Predicts the UCB score for each arm given the context.
+        Predicts the epsilon-greedy score for each arm given the context.
 
         Args:
             context_x (np.array): A (n_features x 1) column vector representing the context.
@@ -132,30 +131,19 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
             raise ValueError(f"Invalid reward type: {self.reward_type}")
         return reward, s, e
     
-    def get_policy_distribution(self, context_x):
-        policy_distribution = []
-        for arm_idx in range(self.n_arms):
-            A_a_inv = np.linalg.inv(self.A[arm_idx])
-            theta_hat_a = A_a_inv @ self.b[arm_idx] # (d x d) @ (d x 1) = (d x 1)
-            expected_reward = context_x.T @ theta_hat_a # (1 x d) @ (d x 1) = (1 x 1)
-            value = expected_reward
-            policy_distribution.append(value)
-        return policy_distribution
-    
-    def show_history(self):
-        for policy in self.history_policy_distribution:
-            print(policy)
-
     def explore(self, question, init_response, pool_size: int, Budget: int):
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append((-s, e, init_response))
+        pool.append((s, e, init_response))
 
         if Budget<self.n_arms:
             raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
         
         for arm_idx in range(self.n_arms):
+            context_x = self.get_context_x(question, init_response)
+            context_x = context_x.reshape(-1, 1)
+
             prompt = STRATEGY_PROMPT.format(question=question, 
                                             response=init_response, 
                                             N=1, 
@@ -167,13 +155,13 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
             new_response = str2json(new_response)[0]
 
             reward, new_score, new_explanation = self.get_reward(question, new_response, s)
-            self.update(arm_idx, self.get_context_x(question, init_response), reward)
-            pool.append((-new_score, new_explanation, new_response))
+            self.update(arm_idx, context_x, reward)
+            pool.append((new_score, new_explanation, new_response))
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             # record the results
             logger.info(f"Iteration {arm_idx}:")
-            logger.info(f"Original score: {-s}, explanation: {e}")
+            logger.info(f"Original score: {s}, explanation: {e}")
             logger.info(f"New score: {new_score}, explanation: {new_explanation}")
             logger.info(f"Chosen arm: {strategy_list[arm_idx]}")
             logger.info(f"New response: {new_response}\n")
@@ -212,24 +200,24 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
             self.update(chosen_arm, context_x, reward)
 
             # 5.1 update the pool with heapq
-            pool.append((-new_score, new_explanation, new_response))
+            pool.append((new_score, new_explanation, new_response))
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             
             # 6. log for evaluation
-            logger.info(f"Iteration {t}:")
-            logger.info(f"Original score: {-curr_s}, explanation: {curr_e}")
-            logger.info(f"New score: {new_score}, explanation: {new_explanation}")
-            logger.info(f"Chosen arm: {strategy_list[chosen_arm]}")
-            logger.info(f"New response: {new_response}\n")
+            print(f"Iteration {t}:")
+            print(f"Original score: {curr_s}, explanation: {curr_e}")
+            print(f"New score: {new_score}, explanation: {new_explanation}")
+            print(f"Chosen arm: {strategy_list[chosen_arm]}")
+            print(f"New response: {new_response}\n")
 
-        return pool[0]
+        return heapq.nlargest(1, pool)[0]
     
     def explore_with_random_arm(self, question, init_response, pool_size: int, Budget: int):
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append((-s, e, init_response))
+        pool.append((s, e, init_response))
         
         for t in range(Budget):
             # 1. Sample a context from the dataset
@@ -258,22 +246,19 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
             reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
 
             # 5.1 update the pool with heapq
-            pool.append((-new_score, new_explanation, new_response))
+            pool.append((new_score, new_explanation, new_response))
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             
             # 6. log for evaluation
             print(f"Iteration {t}:")
-            print(f"Original score: {-curr_s}, explanation: {curr_e}")
+            print(f"Original score: {curr_s}, explanation: {curr_e}")
             print(f"New score: {new_score}, explanation: {new_explanation}")
             print(f"Chosen arm: {strategy_list[chosen_arm]}")
             print(f"New response: {new_response}\n")
 
-        return pool[0]
+        return heapq.nlargest(1, pool)[0]
 
-
-
-# class ContextualNeuralUCBAgent(EvolveAgent):
 
 
 categories = [
@@ -287,29 +272,28 @@ categories = [
 ]
 
 if __name__ == "__main__":
-    setup_logging(task_name="UCB")
+    setup_logging(task_name="Epsilon-Greedy")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--Budget", type=int, default=20)
+    parser.add_argument("--epsilon", type=float, default=0.1)
+    parser.add_argument("--Budget", type=int, default=30)
     parser.add_argument("--pool_size", type=int, default=5)
     parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
-    parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-mini")
-    parser.add_argument("--init_answer_model_name", type=str, default="mistral-gemeni-sft")
-    parser.add_argument("--alpha", type=float, default=1.0)
+    parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
     parser.add_argument("--save_path", type=str, default="results/")
     parser.add_argument("--test_mode", type=str, default="policy", choices=["random", "policy"])
-    parser.add_argument("--dataset_name", type=str, default="lima")
-    parser.add_argument("--response_model_name", type=str, default="human_written")
+    parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
+    parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=10)
-    parser.add_argument("--epsilon", type=float, default=0.1)
+    parser.add_argument("--eval_num", type=int, default=800)
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
 
     args = parser.parse_args()
 
     dataset_name = args.dataset_name
+    epsilon = args.epsilon
     response_model_name = args.response_model_name
 
     n_features = args.n_features
@@ -320,16 +304,15 @@ if __name__ == "__main__":
     alpha = args.alpha
     lambda_reg = args.lambda_reg
     eval_num = args.eval_num
-    epsilon = args.epsilon
-    reward_type = args.reward_type
 
     budget = args.Budget
     pool_size = args.pool_size
     data_dir = args.data_dir
+    reward_type = args.reward_type
 
     logger.info(f"Dataset: {dataset_name}, Response model: {response_model_name}")
     logger.info(f"Budget: {budget}, Pool size: {pool_size}")
-    logger.info(f"Alpha: {alpha}, Lambda reg: {lambda_reg}")
+    logger.info(f"Epsilon: {epsilon}, Lambda reg: {lambda_reg}")
     logger.info(f"N features: {n_features}")
     logger.info(f"Data dir: {data_dir}")
     logger.info(f"Test mode: {args.test_mode}")
@@ -352,10 +335,25 @@ if __name__ == "__main__":
         logger.info(f"Question {idx}: {question}")
         logger.info(f"Response {idx}: {response}")
 
-        agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, alpha, lambda_reg)
+        agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, reward_type, lambda_reg)
 
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
+        if original_score == 9:
+            logger.info(f"Perfect score 9, skip")
+            # record the results
+            test_results.append({
+                "category": category,
+                "instruction": question,
+                "output": response,
+                "original_score": original_score,
+                "original_explanation": original_explanation,
+                "final_score": original_score,
+                "final_explanation": original_explanation,
+                "final_response": response,
+                "skip": True,
+            })
+            continue
 
         if args.test_mode == "random":
             final_score, final_explanation, final_response = agent.explore_with_random_arm(question, response, pool_size, budget)
@@ -364,7 +362,7 @@ if __name__ == "__main__":
         else:
             raise ValueError(f"Invalid test mode: {args.test_mode}")
 
-        logger.info(f"Final score: {-final_score}, explanation: {final_explanation}")
+        logger.info(f"Final score: {final_score}, explanation: {final_explanation}")
         logger.info(f"Final response: {final_response}")
         logger.info("-"*100)
 
@@ -378,18 +376,17 @@ if __name__ == "__main__":
             "final_score": final_score,
             "final_explanation": final_explanation,
             "final_response": final_response,
+            "skip": False,
         })
 
     # record the evaluation results
     analysis = {
-        "strategy": "Epsilon Greedy",
-        "epsilon": epsilon,
+        "strategy": "Epsilon-Greedy",
         "dataset_name": dataset_name,
         "response_model_name": response_model_name,
         "test_mode": args.test_mode,
         "judge_model_name": judge_model_name,
         "llm_agent_name": llm_agent.model_name,
-        "init_answer_model_name": args.init_answer_model_name,
         "alpha": alpha,
         "lambda_reg": lambda_reg,
         "n_features": n_features,
@@ -404,23 +401,37 @@ if __name__ == "__main__":
         logger.info(f"Category: {category}")
         logger.info(f"Number of results: {len(category_results)}")
 
-        up_num = len([result for result in category_results if result["original_score"] < result["final_score"]])
-        down_num = len([result for result in category_results if result["original_score"] > result["final_score"]])
-        tie_num = len([result for result in category_results if result["original_score"] == result["final_score"]])
+        up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result["skip"]])
+        down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result["skip"]])
+        tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result["skip"]])
+        avg_score_before = np.mean([result["original_score"] for result in category_results])
+        avg_score_after = np.mean([result["final_score"] for result in category_results])
         logger.info(f"Number of up results: {up_num}")
         logger.info(f"Number of down results: {down_num}")
         logger.info(f"Number of tie results: {tie_num}")
-        logger.info(f"Average improvement: {np.mean([result['final_score'] - result['original_score'] for result in category_results])}")
+        logger.info(f"Number of skip results: {len([result for result in category_results if result['skip']])}")
+        logger.info(f"Average improvement: {np.mean([result['final_score'] - result['original_score'] for result in category_results if not result['skip']])}")
+        logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
         logger.info("--------------------------------")
 
         analysis[category] = {
             "up_num": up_num,
             "down_num": down_num,
             "tie_num": tie_num,
+            "skip_num": len([result for result in category_results if result["skip"]]),
             "average_improvement": np.mean([result["final_score"] - result["original_score"] for result in category_results]),
+            "avg_score_before": avg_score_before,
+            "avg_score_after": avg_score_after,
         }
     
     # save the analysis in the output
-    with open(os.path.join(args.save_path, f"evaluation_results.json"), "w") as f:
-        json.dump(analysis, f)
+    save_path = os.path.join(args.save_path, f"evaluation_results.json")
+    if os.path.exists(save_path):
+        history_analysis = json.load(open(save_path, "r"))
+        history_analysis.append(analysis)
+    else:
+        history_analysis = [analysis]
         
+    with open(save_path, "w") as f:
+        json.dump(history_analysis, f)
+    

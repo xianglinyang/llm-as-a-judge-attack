@@ -321,6 +321,7 @@ if __name__ == "__main__":
     budget = args.Budget
     pool_size = args.pool_size
     data_dir = args.data_dir
+    reward_type = args.reward_type
 
     logger.info(f"Dataset: {dataset_name}, Response model: {response_model_name}")
     logger.info(f"Budget: {budget}, Pool size: {pool_size}")
@@ -416,11 +417,14 @@ if __name__ == "__main__":
         up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result["skip"]])
         down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result["skip"]])
         tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result["skip"]])
+        avg_score_before = np.mean([result["original_score"] for result in category_results])
+        avg_score_after = np.mean([result["final_score"] for result in category_results])
         logger.info(f"Number of up results: {up_num}")
         logger.info(f"Number of down results: {down_num}")
         logger.info(f"Number of tie results: {tie_num}")
         logger.info(f"Number of skip results: {len([result for result in category_results if result['skip']])}")
         logger.info(f"Average improvement: {np.mean([result['final_score'] - result['original_score'] for result in category_results if not result['skip']])}")
+        logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
         logger.info("--------------------------------")
 
         analysis[category] = {
@@ -429,6 +433,8 @@ if __name__ == "__main__":
             "tie_num": tie_num,
             "skip_num": len([result for result in category_results if result["skip"]]),
             "average_improvement": np.mean([result["final_score"] - result["original_score"] for result in category_results]),
+            "avg_score_before": avg_score_before,
+            "avg_score_after": avg_score_after,
         }
     
     # save the analysis in the output

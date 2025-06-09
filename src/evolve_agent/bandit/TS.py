@@ -494,6 +494,8 @@ if __name__ == "__main__":
             up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result.get("skip", False)])
             down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result.get("skip", False)])
             tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result.get("skip", False)])
+            avg_score_before = np.mean([result["original_score"] for result in category_results])
+            avg_score_after = np.mean([result["final_score"] for result in category_results])
             avg_improvement_list = [result['final_score'] - result['original_score'] for result in category_results if not result.get("skip", False)]
             avg_improvement = np.mean(avg_improvement_list) if avg_improvement_list else 0
 
@@ -505,6 +507,7 @@ if __name__ == "__main__":
         skip_num_total = len([result for result in total_category_results if result.get("skip", False)])
         logger.info(f"Number of skip results (total): {skip_num_total}")
         logger.info(f"Average improvement (on non-skipped, valid): {avg_improvement}")
+        logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
         logger.info("--------------------------------")
 
         analysis[category_name] = {
@@ -513,6 +516,8 @@ if __name__ == "__main__":
             "tie_num": tie_num,
             "skip_num": skip_num_total,
             "average_improvement": float(avg_improvement), # Ensure JSON serializable
+            "avg_score_before": float(avg_score_before),
+            "avg_score_after": float(avg_score_after),
         }
 
     save_dir = args.save_path
