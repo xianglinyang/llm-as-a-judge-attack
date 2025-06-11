@@ -85,7 +85,6 @@ if __name__ == "__main__":
     setup_logging(task_name="Epsilon-Greedy")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--epsilon", type=float, default=0.1)
     parser.add_argument("--Budget", type=int, default=20)
     parser.add_argument("--pool_size", type=int, default=3)
     parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
@@ -100,6 +99,8 @@ if __name__ == "__main__":
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
     parser.add_argument("--eval_num", type=int, default=10)
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
+
+    parser.add_argument("--epsilon", type=float, default=0.1)
 
     args = parser.parse_args()
 
