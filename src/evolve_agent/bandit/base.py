@@ -19,22 +19,10 @@ from src.llm_zoo import ModelWrapper
 from src.text_encoder import TextEncoder
 from src.llm_evaluator import JudgeModel
 from src.text_encoder import TextEncoder
+from src.evolve_agent.utils import find_shortest_of_max_simple
 from src.evolve_agent.bias_strategies import Bias_types, BiasModification
 
 logger = logging.getLogger(__name__)
-
-def find_shortest_of_max_simple(data):
-    if not data:
-        return None
-
-    # 1. First pass: Find the maximum key value.
-    max_key = max(item[0] for item in data)
-    
-    # 2. Second pass: Create a new list of all items that have that max key.
-    all_max_items = [item for item in data if item[0] == max_key]
-    
-    # 3. On this smaller list, find the item with the minimum length.
-    return min(all_max_items, key=len)
 
 class ContextualBanditAgent(EvolveAgent):
     def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative"):
