@@ -290,8 +290,9 @@ if __name__ == "__main__":
     logger.info("-"*100)
 
     # save the trajectories
+    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     os.makedirs(args.save_trajectory_path, exist_ok=True)
-    save_path = os.path.join(args.save_trajectory_path, f"""epsilon_{args.test_mode}_{time.strftime("%Y-%m-%d %H:%M:%S")}.json""")
+    save_path = os.path.join(args.save_trajectory_path, f"epsilon_greedy_{args.test_mode}_{timestamp}.json")
     analysis["trajectory_path"] = save_path
     with open(save_path, "w") as f:
         json.dump(analysis, f)
