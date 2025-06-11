@@ -166,6 +166,8 @@ if __name__ == "__main__":
                 "exploration_length": 1,
                 "skip": True,
             })
+        elif original_score == -1:
+            logger.info(f"Invalid score, skip")
         else:
             dataset_for_exploration.append((question, response, category, original_score, original_explanation))
         
