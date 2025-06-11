@@ -57,7 +57,6 @@ class ContextualBanditAgent(EvolveAgent):
         self.llm_agent = llm_agent
         self.reward_type = reward_type
         self.bias_modificatior = BiasModification(llm_agent)
-        self.init_policy_model()
     
     @abstractmethod
     def init_policy_model(self):
@@ -251,8 +250,9 @@ class ContextualBanditAgent(EvolveAgent):
     
 
 class ContextualLinBanditAgent(ContextualBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative"):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", lambda_reg: float = 1.0):
         super().__init__(n_features, llm_agent, embedding_model, llm_evaluator, reward_type)
+        self.lambda_reg = lambda_reg
 
     def init_policy_model(self):
         # Initialize parameters for each arm
