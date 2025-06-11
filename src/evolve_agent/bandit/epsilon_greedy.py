@@ -1,25 +1,23 @@
 import numpy as np
 import random
-import heapq
 import logging
 import argparse
 from tqdm import tqdm
 import os
 import json
 
-from src.evolve_agent import EvolveAgent
-from src.evolve_agent.bandit.config import strategy_list, STRATEGY_PROMPT
+from src.evolve_agent.bandit.base import ContextualLinBanditAgent
 from src.llm_evaluator import JudgeModel
 from src.text_encoder import TextEncoder, MiniLMTextEncoder
 from src.llm_zoo import ModelWrapper, load_model
-from src.utils import str2json
 from src.data import load_dataset
 from src.logging_utils import setup_logging
+from src.data import CATEGORIES
 
 logger = logging.getLogger(__name__)
 
-class ContextualLinEpsilonGreedyAgent(EvolveAgent):
-    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, init_model_name: str, reward_type: str = "relative", lambda_reg: float = 1.0):
+class ContextualLinEpsilonGreedyAgent(ContextualLinBanditAgent):
+    def __init__(self, epsilon: float, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", lambda_reg: float = 1.0):
         """
         Initializes the LinUCB agent.
 
@@ -32,27 +30,9 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
                                 This is the 'lambda' in (X^T X + lambda*I)^-1 X^T y.
                                 Corresponds to initializing A_a with lambda_reg * I.
         """
-        super().__init__()
-        
+        super().__init__(n_features, llm_agent, embedding_model, llm_evaluator, reward_type, lambda_reg)
         self.epsilon = epsilon
-        self.n_arms = len(strategy_list) # number of arms
-        self.strategy_list = strategy_list
-        self.n_features = n_features
-        self.lambda_reg = lambda_reg
-        self.llm_evaluator = llm_evaluator
-        self.embedding_model = embedding_model
-        self.llm_agent = llm_agent
-        self.init_model_name = init_model_name
-        self.reward_type = reward_type
-
-        self.init_policy()
-    
-    def init_policy(self):
-        # Initialize parameters for each arm
-        # A_a: (d x d) matrix for each arm a. Stores (X_a^T X_a + lambda_reg * I)
-        # b_a: (d x 1) vector for each arm a. Stores (X_a^T y_a)
-        self.A = [np.identity(self.n_features) * self.lambda_reg for _ in range(self.n_arms)]
-        self.b = [np.zeros((self.n_features, 1)) for _ in range(self.n_arms)]
+        self.init_policy_model()
 
     def predict(self, context_x):
         """
@@ -98,186 +78,15 @@ class ContextualLinEpsilonGreedyAgent(EvolveAgent):
             chosen_arm_idx = np.argmax(scores)
         return chosen_arm_idx
 
-    def update(self, chosen_arm_idx, context_x, reward):
-        """
-        Updates the parameters for the chosen arm.
 
-        Args:
-            chosen_arm_idx (int): The index of the arm that was played.
-            context_x (np.array): The context vector (n_features x 1) for which the arm was played.
-            reward (float): The observed reward.
-        """
-        if context_x.shape != (self.n_features, 1):
-            raise ValueError(f"Context_x must be a column vector of shape ({self.n_features}, 1)")
-
-        # Update A_a = A_a + x_t * x_t^T
-        self.A[chosen_arm_idx] += context_x @ context_x.T # (d x 1) @ (1 x d) = (d x d)
-
-        # Update b_a = b_a + r_t * x_t
-        self.b[chosen_arm_idx] += reward * context_x # scalar * (d x 1) = (d x 1)
-    
-    def get_context_x(self, question: str, response: str):
-        text = "Question: " + question + "\n" + "Response: " + response
-        embedding = self.embedding_model.encode(text)
-        return embedding
-    
-    def get_reward(self, question: str, response: str, original_score: float):
-        s, e = self.llm_evaluator.pointwise_score(question, response)
-        if self.reward_type == "relative":
-            reward = s-original_score
-        elif self.reward_type == "absolute":
-            reward = s
-        else:
-            raise ValueError(f"Invalid reward type: {self.reward_type}")
-        return reward, s, e
-    
-    def explore(self, question, init_response, pool_size: int, Budget: int):
-        # init the response pool
-        pool = []
-        s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append((s, e, init_response))
-
-        if Budget<self.n_arms:
-            raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
-        
-        for arm_idx in range(self.n_arms):
-            context_x = self.get_context_x(question, init_response)
-            context_x = context_x.reshape(-1, 1)
-
-            prompt = STRATEGY_PROMPT.format(question=question, 
-                                            response=init_response, 
-                                            N=1, 
-                                            strategy=strategy_list[arm_idx],
-                                            feedback=e,
-                                            score=s,
-                                            )
-            new_response = self.llm_agent.invoke(prompt)
-            new_response = str2json(new_response)[0]
-
-            reward, new_score, new_explanation = self.get_reward(question, new_response, s)
-            self.update(arm_idx, context_x, reward)
-            pool.append((new_score, new_explanation, new_response))
-            if len(pool) > pool_size:
-                heapq.heappop(pool)
-            # record the results
-            logger.info(f"Iteration {arm_idx}:")
-            logger.info(f"Original score: {s}, explanation: {e}")
-            logger.info(f"New score: {new_score}, explanation: {new_explanation}")
-            logger.info(f"Chosen arm: {strategy_list[arm_idx]}")
-            logger.info(f"New response: {new_response}\n")
-        
-        for t in range(self.n_arms, Budget):
-            # 1. Sample a context from the dataset
-            idx = random.choice(range(len(pool)))
-            curr_s, curr_e, curr_r = pool[idx]
-
-            context_x = self.get_context_x(question, curr_r)
-            context_x = context_x.reshape(-1, 1)
-
-            # 2. Choose an arm
-            chosen_arm = self.choose_arm(context_x)
-            if chosen_arm == self.n_arms - 1:
-                print(f"No change in iteration {t}")
-                self.update(chosen_arm, context_x, 0)
-                continue
-
-            # 3. get new response
-            prompt = STRATEGY_PROMPT.format(question=question, 
-                                            response=curr_r, 
-                                            N=1, 
-                                            strategy=strategy_list[chosen_arm],
-                                            feedback=curr_e,
-                                            score=curr_s,
-                                            )
-            
-            new_response = self.llm_agent.invoke(prompt)
-            new_response = str2json(new_response)[0]
-
-            # 4. Get the reward
-            reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
-
-            # 5. Update the policy
-            self.update(chosen_arm, context_x, reward)
-
-            # 5.1 update the pool with heapq
-            pool.append((new_score, new_explanation, new_response))
-            if len(pool) > pool_size:
-                heapq.heappop(pool)
-            
-            # 6. log for evaluation
-            print(f"Iteration {t}:")
-            print(f"Original score: {curr_s}, explanation: {curr_e}")
-            print(f"New score: {new_score}, explanation: {new_explanation}")
-            print(f"Chosen arm: {strategy_list[chosen_arm]}")
-            print(f"New response: {new_response}\n")
-
-        return heapq.nlargest(1, pool)[0]
-    
-    def explore_with_random_arm(self, question, init_response, pool_size: int, Budget: int):
-        # init the response pool
-        pool = []
-        s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append((s, e, init_response))
-        
-        for t in range(Budget):
-            # 1. Sample a context from the dataset
-            idx = random.choice(range(len(pool)))
-            curr_s, curr_e, curr_r = pool[idx]
-
-            # 2. Choose an arm
-            chosen_arm = random.choice(range(self.n_arms))
-            if chosen_arm == self.n_arms - 1:
-                print(f"No change in iteration {t}")
-                continue
-
-            # 3. get new response
-            prompt = STRATEGY_PROMPT.format(question=question, 
-                                            response=curr_r, 
-                                            N=1, 
-                                            strategy=strategy_list[chosen_arm],
-                                            feedback=curr_e,
-                                            score=curr_s,
-                                            )
-            
-            new_response = self.llm_agent.invoke(prompt)
-            new_response = str2json(new_response)[0]
-
-            # 4. Get the reward
-            reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
-
-            # 5.1 update the pool with heapq
-            pool.append((new_score, new_explanation, new_response))
-            if len(pool) > pool_size:
-                heapq.heappop(pool)
-            
-            # 6. log for evaluation
-            print(f"Iteration {t}:")
-            print(f"Original score: {curr_s}, explanation: {curr_e}")
-            print(f"New score: {new_score}, explanation: {new_explanation}")
-            print(f"Chosen arm: {strategy_list[chosen_arm]}")
-            print(f"New response: {new_response}\n")
-
-        return heapq.nlargest(1, pool)[0]
-
-
-
-categories = [
-    "Computer Science & Programming",
-    "Mathematics & Statistics",
-    "Science & Engineering",
-    "Business & Finance",
-    "Writing & Communication",
-    "Social & Daily Life",
-    "Others"
-]
 
 if __name__ == "__main__":
     setup_logging(task_name="Epsilon-Greedy")
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--epsilon", type=float, default=0.1)
-    parser.add_argument("--Budget", type=int, default=30)
-    parser.add_argument("--pool_size", type=int, default=5)
+    parser.add_argument("--Budget", type=int, default=20)
+    parser.add_argument("--pool_size", type=int, default=3)
     parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--lambda_reg", type=float, default=1.0)
@@ -287,7 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
     parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=800)
+    parser.add_argument("--eval_num", type=int, default=5)
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
 
     args = parser.parse_args()
@@ -301,7 +110,6 @@ if __name__ == "__main__":
     embedding_model = MiniLMTextEncoder()
     judge_model_name = args.judge_model_name
     llm_evaluator = JudgeModel(judge_model_name)
-    alpha = args.alpha
     lambda_reg = args.lambda_reg
     eval_num = args.eval_num
 
@@ -335,7 +143,7 @@ if __name__ == "__main__":
         logger.info(f"Question {idx}: {question}")
         logger.info(f"Response {idx}: {response}")
 
-        agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, response_model_name, reward_type, lambda_reg)
+        agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, reward_type, lambda_reg)
 
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
@@ -356,11 +164,14 @@ if __name__ == "__main__":
             continue
 
         if args.test_mode == "random":
-            final_score, final_explanation, final_response = agent.explore_with_random_arm(question, response, pool_size, budget)
+            final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget, cold_start=True)
         elif args.test_mode == "policy":
-            final_score, final_explanation, final_response = agent.explore(question, response, pool_size, budget)
+            final_trajectory = agent.explore(question, response, pool_size, budget, cold_start=True)
         else:
             raise ValueError(f"Invalid test mode: {args.test_mode}")
+        
+        final_score, final_explanation, final_response = final_trajectory[-1]
+        exploration_length = len(final_trajectory)-1
 
         logger.info(f"Final score: {final_score}, explanation: {final_explanation}")
         logger.info(f"Final response: {final_response}")
@@ -387,7 +198,6 @@ if __name__ == "__main__":
         "test_mode": args.test_mode,
         "judge_model_name": judge_model_name,
         "llm_agent_name": llm_agent.model_name,
-        "alpha": alpha,
         "lambda_reg": lambda_reg,
         "n_features": n_features,
         "budget": budget,
@@ -396,7 +206,7 @@ if __name__ == "__main__":
         "reward_type": reward_type,
     }
     # Analyze the test result for each category
-    for category in categories:
+    for category in CATEGORIES:
         category_results = [result for result in test_results if result["category"] == category]
         logger.info(f"Category: {category}")
         logger.info(f"Number of results: {len(category_results)}")
