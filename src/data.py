@@ -1,12 +1,13 @@
 '''
+Dataset for evaluation:
 1. AlpacaEval
 2. ArenaHard
 3. MTBench
 4. UltraFeedback
 5. Dolly
 6. Oasst
+7. JudgeBench
 '''
-# parse the data_path.yaml
 import json
 import os
 from tqdm import tqdm
@@ -193,32 +194,32 @@ if __name__ == "__main__":
     model_name_list = [
         # "meta-llama/Llama-3.2-1B-Instruct",
         # "meta-llama/Llama-3.2-3B-Instruct",
-        # "meta-llama/Llama-3.1-8B-Instruct",
+        "meta-llama/Llama-3.1-8B-Instruct",
         # "google/gemma-3-1b-it",
         # "google/gemma-3-4b-it",
-        # "google/gemma-3-12b-it",
-        # "google/gemma-3-27b-it",
-        # "mistralai/Mixtral-7B-Instruct-v0.2",
-        # "mistralai/Mixtral-8x7B-Instruct-v0.1"
+        "google/gemma-3-12b-it",
+        "google/gemma-3-27b-it",
+        "mistralai/Mistral-7B-Instruct-v0.2"
+        "mistralai/Mixtral-8x7B-Instruct-v0.1"
     ]
 
-    # dataset_name = "AlpacaEval"
-    # for model_name in model_name_list:
-    #     get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+    dataset_name = "AlpacaEval"
+    for model_name in model_name_list:
+        get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8, gpu_memory_utilization=0.8)
 
-    # dataset_name = "ArenaHard"
-    # for model_name in model_name_list:
-    #     get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+    dataset_name = "ArenaHard"
+    for model_name in model_name_list:
+        get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8, gpu_memory_utilization=0.8)
 
-    # dataset_name = "MTBench"
-    # for model_name in model_name_list:
-    #     get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8)
+    dataset_name = "MTBench"
+    for model_name in model_name_list:
+        get_response_from_model(save_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8, gpu_memory_utilization=0.8)
 
     model_name_list = [
-        "gpt-4o-mini",
+        # "gpt-4o-mini",
         # "gpt-4o",
         # "gpt-4.1",
-        # "gpt-4.1-mini",
+        "gpt-4.1-mini",
         # "gpt-4o-2024-05-13",
         # "gpt-4-turbo-2024-04-09",
         # "gpt-4-0613",
