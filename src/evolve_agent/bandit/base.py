@@ -153,7 +153,7 @@ class ContextualBanditAgent(EvolveAgent):
             idx = random.choice(range(len(pool)))
             
             curr_path = pool[idx].copy()
-            curr_s, curr_e, curr_r = curr_path[-1]
+            curr_s, curr_e, curr_r, _ = curr_path[-1]
 
             context_x = self.get_context_x(question, curr_r)
             context_x = context_x.reshape(-1, 1)
@@ -199,7 +199,7 @@ class ContextualBanditAgent(EvolveAgent):
             # 1. Sample a context from the dataset
             idx = random.choice(range(len(pool)))
             curr_path = pool[idx].copy()
-            curr_s, curr_e, curr_r = curr_path[-1]
+            curr_s, curr_e, curr_r, _ = curr_path[-1]
 
             # 2. Choose an arm
             chosen_arm = random.choice(range(self.n_arms))
