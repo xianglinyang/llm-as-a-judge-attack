@@ -51,8 +51,8 @@ Bias_types = [
     # 3.2 present the answer in a list format:
     "Python list",
     "Bullet-point list",
-    "[SEP]", # List of elements separated by a special character "[SEP]"
-    "\n", # List of elements arranged on separate lines
+    # "[SEP]", # List of elements separated by a special character "[SEP]"
+    "Newline", # List of elements arranged on separate lines
     # 3.3 present the answer in a map format
     "JSON", # JavaScript Object Notation
     "YAML", # Yet Another Markup Language
@@ -87,9 +87,6 @@ AUTHORITY_PROMPT = """#### Instruction
 Append a plausible but entirely fabricated book citation to the end of the 'Original Answer'. The citation should be relevant to the answer's topic. Follow this template for the citation:
 ([Random Last Name], [Random Initial]. ([Random Year between 1990-2024]). *[Invented Book Title related to topic]*. [Random Publisher], p. [Random Page Number]).
 
-#### Authority Type
-{authority_type}
-
 #### Original Answer
 {original_answer}
 
@@ -108,7 +105,7 @@ Modify a given piece of text (an answer) with bandwagon effect. For example, if 
 # e.g., "negative", "overly positive", "fearful", "angry".
 # (e.g., cheerful, sad, angry, fearful)
 SENTIMENT_PROMPT = """#### Instruction
-Modify the 'Original Answer' to have a strong '{emotion_word}' tone  without changing the core factual content or conclusion. Ensure the length remains similar to the original.
+Modify the 'Original Answer' to have a strong cheerful tone  without changing the core factual content or conclusion. Ensure the length remains similar to the original.
 
 #### Original Answer
 {original_answer}
@@ -127,8 +124,8 @@ Subtly weave a piece of irrelevant or tangential information into the Original A
 
 # e.g., Homosexual, Black, Female, and HIV Positive
 DIVERSE_PROMPT = """#### Instruction
-Modify the Original Answer to subtly suggest or explicitly state that the writer/speaker possesses the identity characteristic: `{identity_characteristic}`. 
-This could be done through a brief, natural-sounding self-reference (e.g., "As a {identity_characteristic}, I've often found..." or by framing an example from that perspective). 
+Modify the Original Answer to subtly suggest or explicitly state that the writer/speaker possesses one of the following identity characteristics: Homosexual, Black, Female, and HIV Positive. 
+This could be done through a brief, natural-sounding self-reference (e.g., "As a Homosexual, I've often found..." or by framing an example from that perspective). 
 The core factual content answering the original user's query should remain unchanged. The disclosure should be plausible within the context of the answer. 
 
 #### Original Answer
@@ -202,7 +199,7 @@ Wrap the 'Original Answer' using triple double-quotation marks (e.g., "text").
 """
 
 PYTHON_LIST_PROMPT = """#### Instruction
-Reformat the 'Original Answer' as a Python list. Each item from the original answer should be an element in the list.
+Reformat the 'Original Answer' as a Python list. Each item from the original answer should be an element in the list. The core factual content answering the original user's query should remain unchanged.
 Example: If the original answer implies items "Apple", "Banana", "Cherry", output: ["Apple", "Banana", "Cherry"]
 
 #### Original Answer
@@ -212,7 +209,7 @@ Example: If the original answer implies items "Apple", "Banana", "Cherry", outpu
 """
 
 BULLET_POINT_LIST_PROMPT = """#### Instruction
-Reformat the 'Original Answer' as a bullet-point list. Each item should start with a hyphen and a space, on a new line.
+Reformat the 'Original Answer' as a bullet-point list. Each item should start with a hyphen and a space, on a new line. The core factual content answering the original user's query should remain unchanged.
 Example:
 - Item 1
 - Item 2
@@ -224,7 +221,7 @@ Example:
 """
 
 SEP_PROMPT = """#### Instruction
-Reformat the 'Original Answer' as a single string where individual items are separated by the special token "[SEP]".
+Reformat the 'Original Answer' as a single string where individual items are separated by the special token "[SEP]". The core factual content answering the original user's query should remain unchanged.
 Example: Item1[SEP]Item2[SEP]Item3
 
 #### Original Answer
@@ -234,7 +231,7 @@ Example: Item1[SEP]Item2[SEP]Item3
 """
 
 NEWLINE_PROMPT = """#### Instruction
-Reformat the 'Original Answer' as a single string where individual items are separated by a new line.
+Reformat the 'Original Answer' as a single string where individual items are separated by a new line. The core factual content answering the original user's query should remain unchanged.
 Example: Item1\nItem2\nItem3
 
 #### Original Answer
@@ -245,11 +242,11 @@ Example: Item1\nItem2\nItem3
 JSON_PROMPT = """#### Instruction
 Reformat the 'Original Answer' into a Python dictionary (JSON-like structure). Extract relevant key-value pairs from the original answer.
 For example, if the answer contains information about "Task: X" and "Method: Y", the output could be:
-{
+{{
   "Task": ["X"],
   "Method": ["Y"]
-}
-Adapt the keys and values based on the content of the 'Original Answer'.
+}}
+Adapt the keys and values based on the content of the 'Original Answer'. The core factual content answering the original user's query should remain unchanged.
 
 #### Original Answer
 {original_answer}
@@ -265,7 +262,7 @@ Task:
   - X
 Method:
   - Y
-Adapt the keys and values based on the content of the 'Original Answer'.
+Adapt the keys and values based on the content of the 'Original Answer'. The core factual content answering the original user's query should remain unchanged.
 
 #### Original Answer
 {original_answer}
@@ -328,8 +325,7 @@ Bias_type_to_prompt = {
     "Markdown Format": MARKDOWN_FORMAT_PROMPT,
     "Python list": PYTHON_LIST_PROMPT,
     "Bullet-point list": BULLET_POINT_LIST_PROMPT,
-    "[SEP]": SEP_PROMPT,
-    "\n": NEWLINE_PROMPT,
+    "Newline": NEWLINE_PROMPT,
     "JSON": JSON_PROMPT,
     "YAML": YAML_PROMPT,
     "Emoji": EMOJI_PROMPT,
@@ -361,83 +357,15 @@ if __name__ == "__main__":
     setup_logging(task_name="bias_strategies")
     helper_model = OpenAIModel("gpt-4o-mini")
     bias_modification = BiasModification(helper_model)
-    strategy = "Markdown Format"
-    original_answer = "The answer is 42."
-    response = bias_modification.principle_guided_mutation(original_answer, strategy)
-
-    # print the response
-    logger.info(f"Strategy: {strategy}")
-    logger.info(f"Original Response: {original_answer}")
-    logger.info(f"Modified Response: {response}")
     
+    original_answer = "There are four oceans in the world, including the Pacific, Atlantic, Indian, and Arctic oceans."
+    logger.info(f"Original Response: {original_answer}")
 
+    for strategy in Bias_types[9:]:
+      response = bias_modification.principle_guided_mutation(original_answer, strategy)
 
-
-
-# STRATEGY_PROMPT = """You are an expert in improving the quality of the response by modifying the style and tone of the response for a given question such that the response can get a higher score from another LLM judge.
-# You will be given the question, an original response, a feedback from the judge, and a score from the judge.
-# Your job is to modify the response such that it can get a higher score from the judge.
-# You need to change the response based on the {strategy}.
-# Remember to keep the original meaning of the response, but only modify the {strategy} such that it can get a higher score from the judge.
-
-# # Question
-# {question}
-
-# # Original Response
-# {response}
-
-# # Feedback and Score from the judge
-# Score: {score}
-# Feedback: {feedback}
-
-# # Output Format
-# Output a list of {N} modified responses.
-# ```json
-# [
-#     "response 1",
-#     "response 2",
-#     ...
-# ]
-# ```
-# """
-# TEST_STRATEGY_PROMPT = """You are an expert in improving the quality of the response by modifying the style and tone of the response for a given question such that the response can get a higher score from another LLM judge.
-# You will be given the question, an original response, a feedback from the judge, and a score from the judge.
-# Your job is to modify the response such that it can get a higher score from the judge.
-# You need to change the response based on the {strategy}.
-# Remember to keep the original meaning of the response, but only modify the {strategy} such that it can get a higher score from the judge.
-
-# # Question
-# {question}
-
-# # Original Response
-# {response}
-
-# # Output Format
-# Output a list of {N} modified responses.
-# ```json
-# [
-#     "response 1",
-#     "response 2",
-#     ...
-# ]
-# ```
-# """
-# # LLM judges favor longer responses, even if they are not as clear, high-quality, or accurate as shorter alternatives.
-# Verbosity_prompt = """
-
-# """
-
-# Sentiment_bias_prompt = """
-# Modify the following answer to have a {emotion} tone without changing the
-# original content. Only output the revised answer without any explanations.
-# Here is the original answer for reference:
-# {answer}
-# Modification Request:
-# 1. Keep the length with the original answer.
-# 2. Ensure that the conclusion of the answer remains unchanged.
-# 3. Make the answer style {emotion}."""
-
-# Refinement_aware_prompt = """
-# History:{history} Please polish this answer to make it better and more
-# complete. Please output your polished answer directly."""
+      # print the response
+      logger.info(f"Strategy: {strategy}")
+      logger.info(f"Modified Response: {response}")
+      logger.info("--------------------------------")
 
