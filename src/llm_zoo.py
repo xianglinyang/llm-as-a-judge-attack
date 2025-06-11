@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 import torch
 import os
 import time
-from typing import List
+from typing import List, Dict
 import logging
 import asyncio
 
@@ -192,6 +192,16 @@ class OpenAIModel(ModelWrapper):
             {"role": "user", "content": prompt},
         ]
 
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            max_tokens=max_new_tokens,
+            n=1,
+            temperature=temperature,
+        )
+        return response.choices[0].message.content.strip()
+    
+    def message_invoke(self, messages: List[Dict[str, str]], max_new_tokens=2048, temperature=0.7) -> str:
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
