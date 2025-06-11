@@ -169,9 +169,9 @@ class ContextualBanditAgent(EvolveAgent):
             self.update(chosen_arm, context_x, reward)
 
             # 5.1 update the pool with heapq
-            new_path = curr_path.append((new_score, new_explanation, new_response))
-            new_path[0] = new_score
-            pool.append(new_path)
+            curr_path.append((new_score, new_explanation, new_response))
+            curr_path[0] = new_score
+            pool.append(curr_path.copy())
             if len(pool) > pool_size:
                 heapq.heappop(pool)
             
@@ -208,9 +208,9 @@ class ContextualBanditAgent(EvolveAgent):
             reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
 
             # 5.1 update the pool with heapq
-            new_path = curr_path.append((new_score, new_explanation, new_response))
-            new_path[0] = new_score
-            pool.append(new_path)
+            curr_path.append((new_score, new_explanation, new_response))
+            curr_path[0] = new_score
+            pool.append(curr_path.copy())
             
             if len(pool) > pool_size:
                 heapq.heappop(pool)
