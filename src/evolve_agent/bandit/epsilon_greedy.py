@@ -5,6 +5,7 @@ import argparse
 from tqdm import tqdm
 import os
 import json
+import time
 
 from src.evolve_agent.bandit.base import ContextualLinBanditAgent
 from src.llm_evaluator import JudgeModel
@@ -91,12 +92,13 @@ if __name__ == "__main__":
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
-    parser.add_argument("--save_path", type=str, default="results/")
-    parser.add_argument("--test_mode", type=str, default="policy", choices=["random", "policy"])
+    parser.add_argument("--save_analysis_path", type=str, default="results/")
+    parser.add_argument("--save_trajectory_path", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/")
+    parser.add_argument("--test_mode", type=str, default="online", choices=["random", "online", "single"])
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
     parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=5)
+    parser.add_argument("--eval_num", type=int, default=10)
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
 
     args = parser.parse_args()
@@ -137,16 +139,17 @@ if __name__ == "__main__":
     logger.info("-"*100)
 
 
+    # preprocess the dataset, exclude the perfect score 9 samples
     test_results = []
+    dataset_for_exploration = []
     for idx in tqdm(range(len(dataset))):
         question, response, category = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category']
         logger.info(f"Question {idx}: {question}")
         logger.info(f"Response {idx}: {response}")
 
-        agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, reward_type, lambda_reg)
-
         original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
         logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
+        
         if original_score == 9:
             logger.info(f"Perfect score 9, skip")
             # record the results
@@ -159,25 +162,52 @@ if __name__ == "__main__":
                 "final_score": original_score,
                 "final_explanation": original_explanation,
                 "final_response": response,
+                "exploration_length": 1,
                 "skip": True,
             })
-            continue
-
-        if args.test_mode == "random":
-            final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget, cold_start=True)
-        elif args.test_mode == "policy":
-            final_trajectory = agent.explore(question, response, pool_size, budget, cold_start=True)
         else:
-            raise ValueError(f"Invalid test mode: {args.test_mode}")
+            dataset_for_exploration.append((question, response, category, original_score, original_explanation))
         
-        final_score, final_explanation, final_response = final_trajectory[-1]
-        exploration_length = len(final_trajectory)-1
+    # Exploration part
+    logger.info(f"Skipped {len(test_results)} samples")
+    logger.info(f"Dataset for exploration: {len(dataset_for_exploration)} samples...")
 
-        logger.info(f"Final score: {final_score}, explanation: {final_explanation}")
-        logger.info(f"Final response: {final_response}")
+    logger.info(f"Initializing the agent...")
+    agent = ContextualLinEpsilonGreedyAgent(epsilon, n_features, llm_agent, embedding_model, llm_evaluator, reward_type, lambda_reg)
+    logger.info(f"Agent initialized.")
+    logger.info("-"*100)
+
+    trajectories = []
+    if args.test_mode == "online":
+        logger.info(f"Running online learning...")
+        trajectories = agent.online_learning([item[0] for item in dataset_for_exploration], [item[1] for item in dataset_for_exploration], pool_size, budget, shuffle_data=True, init_policy=True)
+        logger.info(f"Online learning finished.")
         logger.info("-"*100)
-
-        # record the results
+    elif args.test_mode == "single":
+        logger.info(f"Running single exploration...")
+        for idx in tqdm(range(len(dataset_for_exploration))):
+            logger.info(f"Exploring question {idx}...")
+            question, response = dataset_for_exploration[idx]
+            final_trajectory = agent.explore(question, response, pool_size, budget, cold_start=True)
+            trajectories.append(final_trajectory.copy())
+        logger.info(f"Single exploration finished.")
+        logger.info("-"*100)
+    elif args.test_mode == "random":
+        logger.info(f"Running random exploration...")
+        for idx in tqdm(range(len(dataset_for_exploration))):
+            logger.info(f"Exploring question {idx}...")
+            question, response = dataset_for_exploration[idx]
+            final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget, cold_start=True)
+            trajectories.append(final_trajectory.copy())
+        logger.info(f"Random exploration finished.")
+        logger.info("-"*100)
+    else:
+        raise ValueError(f"Invalid test mode: {args.test_mode}")
+    
+    # keep on record the results
+    for (question, response, category, original_score, original_explanation), trajectory in zip(dataset_for_exploration, trajectories):
+        final_score, final_explanation, final_response = trajectory[-1]
+        exploration_length = len(trajectory)-1
         test_results.append({
             "category": category,
             "instruction": question,
@@ -187,9 +217,10 @@ if __name__ == "__main__":
             "final_score": final_score,
             "final_explanation": final_explanation,
             "final_response": final_response,
+            "exploration_length": exploration_length,
             "skip": False,
         })
-
+    
     # record the evaluation results
     analysis = {
         "strategy": "Epsilon-Greedy",
@@ -204,6 +235,8 @@ if __name__ == "__main__":
         "pool_size": pool_size,
         "eval_num": eval_num,
         "reward_type": reward_type,
+        "epsilon": epsilon,
+        "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
     # Analyze the test result for each category
     for category in CATEGORIES:
@@ -214,13 +247,17 @@ if __name__ == "__main__":
         up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result["skip"]])
         down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result["skip"]])
         tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result["skip"]])
-        avg_score_before = np.mean([result["original_score"] for result in category_results])
-        avg_score_after = np.mean([result["final_score"] for result in category_results])
+        skip_num = len([result for result in category_results if result["skip"]])
+        avg_exploration_length = np.mean([result["exploration_length"] for result in category_results if not result["skip"]])
+        avg_improvement = np.mean([result["final_score"] - result["original_score"] for result in category_results if not result["skip"]])
+        avg_score_before = np.mean([result["original_score"] for result in category_results if not result["skip"]])
+        avg_score_after = np.mean([result["final_score"] for result in category_results if not result["skip"]])
         logger.info(f"Number of up results: {up_num}")
         logger.info(f"Number of down results: {down_num}")
         logger.info(f"Number of tie results: {tie_num}")
-        logger.info(f"Number of skip results: {len([result for result in category_results if result['skip']])}")
-        logger.info(f"Average improvement: {np.mean([result['final_score'] - result['original_score'] for result in category_results if not result['skip']])}")
+        logger.info(f"Number of skip results: {skip_num}")
+        logger.info(f"Average exploration length: {avg_exploration_length}")
+        logger.info(f"Average improvement: {avg_improvement}")
         logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
         logger.info("--------------------------------")
 
@@ -228,14 +265,16 @@ if __name__ == "__main__":
             "up_num": up_num,
             "down_num": down_num,
             "tie_num": tie_num,
-            "skip_num": len([result for result in category_results if result["skip"]]),
-            "average_improvement": np.mean([result["final_score"] - result["original_score"] for result in category_results]),
+            "skip_num": skip_num,
+            "exploration_length": avg_exploration_length,
+            "average_improvement": avg_improvement,
             "avg_score_before": avg_score_before,
             "avg_score_after": avg_score_after,
         }
     
     # save the analysis in the output
-    save_path = os.path.join(args.save_path, f"evaluation_results.json")
+    os.makedirs(args.save_analysis_path, exist_ok=True)
+    save_path = os.path.join(args.save_analysis_path, f"evaluation_results.json")
     if os.path.exists(save_path):
         history_analysis = json.load(open(save_path, "r"))
         history_analysis.append(analysis)
@@ -244,4 +283,14 @@ if __name__ == "__main__":
         
     with open(save_path, "w") as f:
         json.dump(history_analysis, f)
-    
+    logger.info(f"Analysis saved to {save_path}")
+    logger.info("-"*100)
+
+    # save the trajectories
+    os.makedirs(args.save_trajectory_path, exist_ok=True)
+    save_path = os.path.join(args.save_trajectory_path, f"""epsilon_{args.test_mode}_{time.strftime("%Y-%m-%d %H:%M:%S")}.json""")
+    analysis["trajectory_path"] = save_path
+    with open(save_path, "w") as f:
+        json.dump(analysis, f)
+    logger.info(f"Trajectories saved to {save_path}")
+    logger.info("-"*100)
