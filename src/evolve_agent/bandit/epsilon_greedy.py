@@ -207,7 +207,7 @@ if __name__ == "__main__":
     
     # keep on record the results
     for (question, response, category, original_score, original_explanation), trajectory in zip(dataset_for_exploration, trajectories):
-        final_score, final_explanation, final_response = trajectory[-1]
+        final_score, final_explanation, final_response, _ = trajectory[-1]
         exploration_length = len(trajectory)-1
         test_results.append({
             "category": category,

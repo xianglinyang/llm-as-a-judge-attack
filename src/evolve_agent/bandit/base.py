@@ -121,7 +121,7 @@ class ContextualBanditAgent(EvolveAgent):
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append([s, (s, e, init_response)])
+        pool.append([s, (s, e, init_response, None)])
 
         curr_step = 0
         if cold_start:
@@ -129,12 +129,14 @@ class ContextualBanditAgent(EvolveAgent):
                 context_x = self.get_context_x(question, init_response)
                 context_x = context_x.reshape(-1, 1)
 
-                new_response = self.bias_modificatior.principle_guided_mutation(init_response, Bias_types[arm_idx])
+                strategy = Bias_types[arm_idx]
+
+                new_response = self.bias_modificatior.principle_guided_mutation(init_response, strategy)
 
                 reward, new_score, new_explanation = self.get_reward(question, new_response, s)
                 self.update(arm_idx, context_x, reward)
                 
-                pool.append([s, (s, e, init_response), (new_score, new_explanation, new_response)])
+                pool.append([s, (s, e, init_response, None), (new_score, new_explanation, new_response, strategy)])
                 if len(pool) > pool_size:
                     heapq.heappop(pool)
 
@@ -160,7 +162,8 @@ class ContextualBanditAgent(EvolveAgent):
             chosen_arm = self.choose_arm(context_x)
 
             # 3. get new response
-            new_response = self.bias_modificatior.principle_guided_mutation(curr_r, Bias_types[chosen_arm])
+            strategy = Bias_types[chosen_arm]
+            new_response = self.bias_modificatior.principle_guided_mutation(curr_r, strategy)
 
             # 4. Get the reward
             reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
@@ -169,7 +172,7 @@ class ContextualBanditAgent(EvolveAgent):
             self.update(chosen_arm, context_x, reward)
 
             # 5.1 update the pool with heapq
-            curr_path.append((new_score, new_explanation, new_response))
+            curr_path.append((new_score, new_explanation, new_response, strategy))
             curr_path[0] = new_score
             pool.append(curr_path.copy())
             if len(pool) > pool_size:
@@ -190,7 +193,7 @@ class ContextualBanditAgent(EvolveAgent):
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append([s, (s, e, init_response)])
+        pool.append([s, (s, e, init_response, None)])
         
         for t in range(Budget):
             # 1. Sample a context from the dataset
@@ -202,13 +205,14 @@ class ContextualBanditAgent(EvolveAgent):
             chosen_arm = random.choice(range(self.n_arms))
 
             # 3. get new response
-            new_response = self.bias_modificatior.principle_guided_mutation(curr_r, Bias_types[chosen_arm])
+            strategy = Bias_types[chosen_arm]
+            new_response = self.bias_modificatior.principle_guided_mutation(curr_r, strategy)
 
             # 4. Get the reward
             reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
 
             # 5.1 update the pool with heapq
-            curr_path.append((new_score, new_explanation, new_response))
+            curr_path.append((new_score, new_explanation, new_response, strategy))
             curr_path[0] = new_score
             pool.append(curr_path.copy())
             
