@@ -12,6 +12,7 @@ import os
 import json
 from abc import abstractmethod
 from sklearn.utils import shuffle
+from typing import Callable
 
 from src.evolve_agent import EvolveAgent
 from src.llm_zoo import ModelWrapper
@@ -22,6 +23,19 @@ from src.evolve_agent.bias_strategies import Bias_types, BiasModification
 
 logger = logging.getLogger(__name__)
 
+def find_shortest_of_max_simple(data):
+    if not data:
+        return None
+
+    # 1. First pass: Find the maximum key value.
+    max_key = max(item[0] for item in data)
+    
+    # 2. Second pass: Create a new list of all items that have that max key.
+    all_max_items = [item for item in data if item[0] == max_key]
+    
+    # 3. On this smaller list, find the item with the minimum length.
+    return min(all_max_items, key=len)
+
 class ContextualBanditAgent(EvolveAgent):
     def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative"):
         """
@@ -29,7 +43,7 @@ class ContextualBanditAgent(EvolveAgent):
 
         Args:
             n_features (int): Dimension of context features (d).
-            llm_agent (ModelWrapper): LLM agent to generate the response.
+            llm_agent (ModelWrapper): LLM agent to generate the response. 
             embedding_model (TextEncoder): Embedding model to encode the context.
             llm_evaluator (JudgeModel): LLM evaluator to evaluate the quality of the response.
             reward_type (str): Type of reward to use.
@@ -43,7 +57,6 @@ class ContextualBanditAgent(EvolveAgent):
         self.llm_agent = llm_agent
         self.reward_type = reward_type
         self.bias_modificatior = BiasModification(llm_agent)
-
         self.init_policy_model()
     
     @abstractmethod
@@ -104,16 +117,13 @@ class ContextualBanditAgent(EvolveAgent):
         return reward, s, e
     
     def explore(self, question, init_response, pool_size: int, Budget: int, cold_start: bool):
+        if Budget<self.n_arms:
+            raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
         # init the response pool
         pool = []
         s, e = self.llm_evaluator.pointwise_score(question, init_response)
-
-        # record the trajectory and current score
         pool.append([s, (s, e, init_response)])
 
-        if Budget<self.n_arms:
-            raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
-        
         curr_step = 0
         if cold_start:
             for arm_idx in range(self.n_arms):
@@ -135,7 +145,7 @@ class ContextualBanditAgent(EvolveAgent):
                 logger.info(f"New score: {new_score}, explanation: {new_explanation}")
                 logger.info(f"Chosen arm: {self.strategy_list[arm_idx]}")
                 logger.info(f"New response: {new_response}\n")
-            curr_step = self.n_arms
+                curr_step += 1
         
         for t in range(curr_step, Budget):
             # 1. Sample a context from the dataset
@@ -173,9 +183,9 @@ class ContextualBanditAgent(EvolveAgent):
             print(f"Chosen arm: {self.strategy_list[chosen_arm]}")
             print(f"New response: {new_response}\n")
 
-        best_path = heapq.nlargest(1, pool)[0]
-        final_score, final_explanation, final_response = best_path[-1]
-        return final_score, final_explanation, final_response
+        best_path = find_shortest_of_max_simple(pool)
+        # final_score, final_explanation, final_response = best_path[-1]
+        return best_path
     
     def explore_with_random_arm(self, question, init_response, pool_size: int, Budget: int):
         # init the response pool
@@ -212,10 +222,10 @@ class ContextualBanditAgent(EvolveAgent):
             print(f"New score: {new_score}, explanation: {new_explanation}")
             print(f"Chosen arm: {self.strategy_list[chosen_arm]}")
             print(f"New response: {new_response}\n")
-
-        best_path = heapq.nlargest(1, pool)[0]
-        final_score, final_explanation, final_response = best_path[-1]
-        return final_score, final_explanation, final_response
+        
+        # return the best response with shortest length
+        best_path = find_shortest_of_max_simple(pool)
+        return best_path
     
     def online_learning(self, question_list, init_response_list, pool_size: int, Budget: int, shuffle_data: bool = True, init_policy: bool = True):
         # shuffle the question and init_response (Optional)
@@ -227,14 +237,17 @@ class ContextualBanditAgent(EvolveAgent):
             logger.info(f"Initializing the policy model")
             self.init_policy_model()
         
+        explore_trajectories = []
         # online learning
         logger.info(f"Online learning started")
         for t, (question, init_response) in tqdm(enumerate(zip(question_list, init_response_list))):
-            self.explore(question, init_response, pool_size, Budget, cold_start=True if t==0 else False)
+            explore_trajectory = self.explore(question, init_response, pool_size, Budget, cold_start=True if t==0 else False)
+            explore_trajectories.append(explore_trajectory)
             logger.info(f"Online learning iteration {t} finished")
             logger.info("-"*100)
 
         logger.info(f"Online learning finished")
+        return explore_trajectories
     
 
 class ContextualLinBanditAgent(ContextualBanditAgent):
