@@ -189,7 +189,7 @@ if __name__ == "__main__":
         logger.info(f"Running single exploration...")
         for idx in tqdm(range(len(dataset_for_exploration))):
             logger.info(f"Exploring question {idx}...")
-            question, response = dataset_for_exploration[idx]
+            question, response, category, original_score, original_explanation = dataset_for_exploration[idx]
             final_trajectory = agent.explore(question, response, pool_size, budget, cold_start=True)
             trajectories.append(final_trajectory.copy())
         logger.info(f"Single exploration finished.")
@@ -198,7 +198,7 @@ if __name__ == "__main__":
         logger.info(f"Running random exploration...")
         for idx in tqdm(range(len(dataset_for_exploration))):
             logger.info(f"Exploring question {idx}...")
-            question, response = dataset_for_exploration[idx]
+            question, response, category, original_score, original_explanation = dataset_for_exploration[idx]
             final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget, cold_start=True)
             trajectories.append(final_trajectory.copy())
         logger.info(f"Random exploration finished.")
