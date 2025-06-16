@@ -15,6 +15,9 @@ def load_metadata(save_dir, dataset_name):
     return metadata
 
 def load_response(save_dir, dataset_name, response_model_name):
+    if "/" in response_model_name:
+        response_model_name = response_model_name.split("/")[-1]
+
     save_path = os.path.join(save_dir, dataset_name, f"{response_model_name}.json")
     if not os.path.exists(save_path):
         raise ValueError(f"Dataset {dataset_name} with response model {response_model_name} not found. Please get the response from the model first.")
@@ -59,3 +62,20 @@ def load_dataset(save_dir, dataset_name, response_model_name):
         else:
             new_dataset.append(item)
     return new_dataset
+
+def load_dataset_for_exploration(save_dir, dataset_name, response_model_name, judge_model_name):
+    if "/" in response_model_name:
+        response_model_name = response_model_name.split("/")[-1]
+    if "/" in judge_model_name:
+        judge_model_name = judge_model_name.split("/")[-1]
+
+    save_path = os.path.join(save_dir, dataset_name, f"dataset_for_exploration_{response_model_name}_{judge_model_name}.json")
+    if not os.path.exists(save_path):
+        raise ValueError(f"Dataset {dataset_name} with response model {response_model_name} and judge model {judge_model_name} not found. Please get the dataset for exploration first.")
+    
+    try:
+        with open(save_path, 'r') as f:
+            data = json.load(f)
+    except Exception as e:
+        raise ValueError(f"Dataset {dataset_name} with response model {response_model_name} and judge model {judge_model_name} not found")
+    return data
