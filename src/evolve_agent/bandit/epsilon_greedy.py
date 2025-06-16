@@ -60,10 +60,37 @@ class ContextualLinEpsilonGreedyAgent(ContextualLinBanditAgent):
             p_ta_values[arm_idx] = expected_reward
 
         return p_ta_values
+    
+    def batch_predict(self, context_x_list):
+        """
+        Predicts the epsilon-greedy score for each arm given the context.
+        Args:
+            context_x_list (np.array): A (n_samples, n_features, 1) tensor representing the context.
+        Returns:
+            np.array: A (n_samples, n_arms, 1) tensor of epsilon-greedy scores for each arm.
+        """
+        if context_x_list.shape[1:] != (self.n_features, 1):
+            raise ValueError(f"Context_x must be a tensor of shape (n_samples, {self.n_features}, 1)")
+        
+        n_samples = context_x_list.shape[0]
+        p_ta_values = np.zeros((n_samples, self.n_arms, 1))
+        
+        for arm_idx in range(self.n_arms):
+            A_a_inv = np.linalg.inv(self.A[arm_idx])
+            theta_hat_a = A_a_inv @ self.b[arm_idx]  # (d x d) @ (d x 1) = (d x 1)
+            
+            # Reshape context_x_list for batch operations
+            context_x_reshaped = context_x_list.reshape(n_samples, self.n_features)  # (n_samples, n_features)
+            
+            # Expected reward part: x^T * theta_hat_a
+            expected_reward = context_x_reshaped @ theta_hat_a  # (n_samples, n_features) @ (n_features, 1) = (n_samples, 1)
+            p_ta_values[:, arm_idx] = expected_reward
+            
+        return p_ta_values
      
     def choose_arm(self, context_x):
         """
-        Chooses an arm based on the highest UCB score.
+        Chooses an arm based on epsilon-greedy strategy.
 
         Args:
             context_x (np.array): A (n_features x 1) column vector representing the context.
@@ -72,12 +99,39 @@ class ContextualLinEpsilonGreedyAgent(ContextualLinBanditAgent):
             int: The index of the chosen arm.
         """
         prob = np.random.rand()
-        if prob<self.epsilon:
+        if prob < self.epsilon:
             chosen_arm_idx = random.choice(range(self.n_arms))
         else:
             scores = self.predict(context_x)
             chosen_arm_idx = np.argmax(scores)
         return chosen_arm_idx
+    
+    def batch_choose_arm(self, context_x_list):
+        """
+        Chooses an arm based on epsilon-greedy strategy.
+        Args:
+            context_x_list (np.array): A (n_samples, n_features, 1) tensor representing the context.
+        Returns:
+            np.array: A (n_samples,) tensor of the chosen arm index for each sample.
+        """
+        n_samples = context_x_list.shape[0]
+        chosen_arm_idxs = np.zeros(n_samples, dtype=int)
+        
+        # Generate random probabilities for each sample
+        probs = np.random.rand(n_samples)
+        
+        # Get greedy choices for all samples
+        scores = self.batch_predict(context_x_list)
+        greedy_choices = np.argmax(scores, axis=1)
+        
+        # For each sample, either use greedy choice or random choice based on epsilon
+        for i in range(n_samples):
+            if probs[i] < self.epsilon:
+                chosen_arm_idxs[i] = random.choice(range(self.n_arms))
+            else:
+                chosen_arm_idxs[i] = greedy_choices[i]
+                
+        return chosen_arm_idxs
 
 
 

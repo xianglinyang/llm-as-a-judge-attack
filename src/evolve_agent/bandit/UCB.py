@@ -65,6 +65,39 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
             p_ta_values[arm_idx] = expected_reward + exploration_bonus
 
         return p_ta_values
+    
+    def batch_predict(self, context_x_list):
+        """
+        Predicts the UCB score for each arm given the context.
+        Args:
+            context_x_list (np.array): A (n_samples, n_features, 1) tensor representing the context.
+        Returns:
+            np.array: A (n_samples, n_arms) tensor of UCB scores for each arm.
+        """
+        if context_x_list.shape != (len(context_x_list), self.n_features, 1):
+            raise ValueError(f"Context_x must be a column vector of shape ({self.n_features}, 1)")
+        
+        n_samples = context_x_list.shape[0]
+        p_ta_values = np.zeros((n_samples, self.n_arms, 1))
+        
+        for arm_idx in range(self.n_arms):
+            A_a_inv = np.linalg.inv(self.A[arm_idx])
+            theta_hat_a = A_a_inv @ self.b[arm_idx]  # (d x d) @ (d x 1) = (d x 1)
+
+            # Reshape context_x_list for batch operations
+            context_x_reshaped = context_x_list.reshape(n_samples, self.n_features)  # (n_samples, n_features)
+            
+            # Expected reward part: x^T * theta_hat_a
+            expected_reward = context_x_reshaped @ theta_hat_a  # (n_samples, n_features) @ (n_features, 1) = (n_samples, 1)
+
+            # Exploration bonus part: alpha * sqrt(x^T * A_a_inv * x)
+            uncertainty_term = np.sum((context_x_reshaped @ A_a_inv) * context_x_reshaped, axis=1, keepdims=True)  # (n_samples, 1)
+            exploration_bonus = self.alpha * np.sqrt(uncertainty_term)
+
+            p_ta_values[:, arm_idx] = expected_reward + exploration_bonus
+
+        return p_ta_values
+    
      
     def choose_arm(self, context_x):
         """
@@ -78,6 +111,18 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
         """
         ucb_scores = self.predict(context_x)
         chosen_arm_idx = np.argmax(ucb_scores)
+        return chosen_arm_idx
+    
+    def batch_choose_arm(self, context_x_list):
+        """
+        Chooses an arm based on the highest UCB score.
+        Args:
+            context_x_list (np.array): A (n_samples, n_features, 1) tensor representing the context.
+        Returns:
+            np.array: A (n_samples,) tensor of the chosen arm index for each sample.
+        """
+        ucb_scores = self.batch_predict(context_x_list)
+        chosen_arm_idx = np.argmax(ucb_scores, axis=1)
         return chosen_arm_idx
 
 
