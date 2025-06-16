@@ -199,7 +199,7 @@ if __name__ == "__main__":
         for idx in tqdm(range(len(dataset_for_exploration))):
             logger.info(f"Exploring question {idx}...")
             question, response, category, original_score, original_explanation = dataset_for_exploration[idx]
-            final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget, cold_start=True)
+            final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget)
             trajectories.append(final_trajectory.copy())
         logger.info(f"Random exploration finished.")
         logger.info("-"*100)
