@@ -10,6 +10,9 @@ class TextEncoder:
     def encode(self, text: str):
         pass
 
+    def batch_encode(self, texts: list[str]):
+        pass
+
 class XLMROBERTaTextEncoder(TextEncoder):
     def __init__(self):
         super().__init__("xlm-roberta-base")
@@ -23,6 +26,11 @@ class XLMROBERTaTextEncoder(TextEncoder):
         embedding = outputs.logits[0, -1, :]
         return embedding
     
+    def batch_encode(self, texts: list[str]):
+        inputs = self.tokenizer(texts, return_tensors="pt", padding=True, truncation=True)
+        outputs = self.model(**inputs)
+        embeddings = outputs.logits.mean(dim=1)
+        return embeddings
 
 class MiniLMTextEncoder(TextEncoder):
     def __init__(self):
@@ -43,3 +51,4 @@ if __name__ == "__main__":
     text_encoder = MiniLMTextEncoder()
     # text_encoder = XLMROBERTaTextEncoder()
     print(text_encoder.encode("Hello, world!").shape)
+    print(text_encoder.batch_encode(["Hello, world!"]*10).shape)
