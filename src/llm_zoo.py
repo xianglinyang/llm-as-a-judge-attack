@@ -13,7 +13,8 @@ from vllm import LLM, SamplingParams
 
 from openai import OpenAI, AsyncOpenAI
 from together import Together
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from anthropic import Anthropic
 
 logger = logging.getLogger(__name__)
@@ -268,29 +269,64 @@ class GeminiModel(ModelWrapper):
 
     def __init__(self, model_name: str):
         super().__init__(model_name)
-        genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-        self.client = genai.GenerativeModel(self.model_name)
+        # genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+        self.client = genai.Client()
 
 
     def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
         """Generates model output using the Gemini API."""
-        generation_config = genai.types.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_new_tokens
-        )
-        response = self.client.generate_content(
-            prompt,
-            generation_config=generation_config,
-        )
+        # generation_config = genai.types.GenerationConfig(
+        #     temperature=temperature,
+        #     max_output_tokens=max_new_tokens
+        # )
+        # response = self.client.generate_content(
+        #     prompt,
+        #     generation_config=generation_config,
+        # )
 
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                max_output_tokens=max_new_tokens,
+                temperature=temperature,
+                # system_instruction='you are a story teller for kids under 5 years old',
+                # top_k= 2,
+                # top_p= 0.5,
+                # response_mime_type= 'application/json',
+                # stop_sequences= ['\n'],
+                # seed=42,
+            ),
+        )
         return response.text.strip()
     
-    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
-        responses = list()
-        for prompt in prompts:
-            response = self.invoke(prompt, max_new_tokens, temperature)
-            responses.append(response)
-        return responses
+    async def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+
+        async def get_completion(prompt_content: str):
+            """
+            Asynchronously gets a completion from the Gemini API.
+            """
+            try:
+                response = await self.client.aio.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt_content,
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=max_new_tokens,
+                        temperature=temperature,
+                    )
+                )
+                
+                return response.text.strip()
+            except Exception as e:
+                print(f"An error occurred for prompt '{prompt_content}': {e}")
+                return None # Or handle error more gracefully
+
+        """
+        Processes a list of prompts concurrently using client.aio api
+        """
+        tasks = [get_completion(prompt) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=False) # Set return_exceptions=True to get exceptions instead of None
+        return results
 
 
 class TogetherModel(ModelWrapper):

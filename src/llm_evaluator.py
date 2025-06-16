@@ -8,6 +8,7 @@ Point-wise scoring:
 import math
 import os
 import torch
+import asyncio
 import numpy as np
 
 from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT
@@ -42,6 +43,24 @@ class JudgeModel:
             print(f"Error: Failed to parse the response as a JSON object. {response}")
         return score, feedback
     
+    def batch_pointwise_score(self, q_list, response_list) -> float:
+        """Returns the model's confidence that the summary is its own output."""
+        formatted_prompts = [POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
+        responses = asyncio.run(self.model.batch_invoke(formatted_prompts))
+        scores = []
+        explanations = []
+        for response in responses:
+            try:
+                json_response = str2json(response)
+                score = int(json_response["score"])
+                explanation = json_response["feedback"]
+                scores.append(score)
+                explanations.append(explanation)
+            except:
+                scores.append(-1)
+                explanations.append("Error: Failed to parse the response as a JSON object.")
+        return scores, explanations
+    
     def pairwise_score(self, input_q, response1, response2) -> float:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompt = PAIRWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2)
@@ -55,6 +74,24 @@ class JudgeModel:
             feedback = "Error: Failed to parse the response as a JSON object."
             print(f"Error: Failed to parse the response as a JSON object. {response}")
         return better_model, feedback
+    
+    def batch_pairwise_score(self, q_list, response1_list, response2_list) -> float:
+        """Returns the model's confidence that the summary is its own output."""
+        formatted_prompts = [PAIRWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
+        responses = asyncio.run(self.model.batch_invoke(formatted_prompts))
+        better_models = []
+        feedbacks = []
+        for response in responses:
+            try:
+                json_response = str2json(response)
+                better_model = json_response["better_model"]
+                feedback = json_response["feedback"]
+                better_models.append(better_model)
+                feedbacks.append(feedback)
+            except:
+                better_models.append(-1)
+                feedbacks.append("Error: Failed to parse the response as a JSON object.")
+        return better_models, feedbacks
 
 
 if __name__ == "__main__":
