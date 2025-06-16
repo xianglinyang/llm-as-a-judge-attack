@@ -7,12 +7,14 @@ import time
 import os
 import json
 import numpy as np
+import asyncio
 
 from src.evolve_agent import EvolveAgent
 from src.llm_zoo import ModelWrapper, load_model
 from src.llm_evaluator import JudgeModel
 from src.logging_utils import setup_logging
-from src.data import load_dataset, CATEGORIES
+from src.data.data_utils import load_dataset_for_exploration
+from src.data.assign_category import CATEGORIES
 from src.evolve_agent.utils import find_shortest_of_max_simple
 
 
@@ -39,7 +41,7 @@ class BaselineEvolveAgent(EvolveAgent):
         self.llm_agent = llm_agent
         self.llm_evaluator = llm_evaluator
     
-    def explore(self, question: str, init_response: str, budget: int = 5, pool_size: int = 2):
+    def explore(self, question: str, init_response: str, original_score: int, original_explanation: str, budget: int = 5, pool_size: int = 2):
         '''
         1. choose the best or with prob
         2. whether to have a strategy agent
@@ -47,23 +49,22 @@ class BaselineEvolveAgent(EvolveAgent):
         '''
         # initialize answer pool as a heap
         pool = []
-        curr_s, curr_e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append([curr_s, (curr_s, curr_e, init_response, None)])
+        pool.append([original_score, (original_score, original_explanation, init_response, None)])
 
         for _ in range(budget):
             # sample from answer pool
             idx = random.choice(range(len(pool)))
             curr_path = pool[idx].copy()
-            curr_s, curr_e, curr_r, _ = curr_path[-1]
+            curr_r = curr_path[-1][2]
 
             # generate new responses
             prompt = BASELINE_PROMPT.format(original_answer=curr_r)
             new_response = self.llm_agent.invoke(prompt)
 
-            new_s, new_e = self.llm_evaluator.pointwise_score(question, new_response)
+            new_score, new_explanation = self.llm_evaluator.pointwise_score(question, new_response)
             
-            curr_path.append((new_s, new_e, new_response, None))
-            curr_path[0] = new_s
+            curr_path.append((new_score, new_explanation, new_response, None))
+            curr_path[0] = new_score
             pool.append(curr_path.copy())
             if len(pool) > pool_size:
                 heapq.heappop(pool)
@@ -71,18 +72,51 @@ class BaselineEvolveAgent(EvolveAgent):
         best_path = find_shortest_of_max_simple(pool)
         return best_path
     
-    def online_learning(self, question_list, init_response_list, pool_size: int, budget: int):
-        explore_trajectories = []
-        # online learning
-        logger.info(f"Online learning started")
-        for t, (question, init_response) in tqdm(enumerate(zip(question_list, init_response_list))):
-            explore_trajectory = self.explore(question, init_response, pool_size, budget)
-            explore_trajectories.append(explore_trajectory)
-            logger.info(f"Online learning iteration {t} finished")
-            logger.info("-"*100)
+    def online_learning(self, question_list, init_response_list, original_score_list, original_explanation_list, budget: int = 5, pool_size: int = 2):
+        '''
+        Online learning
+        '''
+        return self.batch_explore(question_list, init_response_list, original_score_list, original_explanation_list, budget, pool_size)
+    
+    def batch_explore(self, question_list, init_response_list, original_score_list, original_explanation_list, budget: int = 5, pool_size: int = 2):
+        '''
+        Batch explore the responses
+        '''
+        # each element in pool_list is a heap with trajectories for each question
+        # init pool_list
+        pool_list = []
+        for init_response, original_score, original_explanation in zip(init_response_list, original_score_list, original_explanation_list):
+            pool = []
+            pool.append([original_score, (original_score, original_explanation, init_response, None)])
+            pool_list.append(pool.copy())
 
-        logger.info(f"Online learning finished")
-        return explore_trajectories
+        for _ in tqdm(range(budget), desc="Batch explore"):
+            response_list = []
+            sampled_path_list = []
+            for pool in pool_list:
+                idx = random.choice(range(len(pool)))
+                curr_path = pool[idx].copy()
+                sampled_path_list.append(curr_path)
+                response_list.append(curr_path[-1][2])
+            
+            new_scores, new_explanations = self.llm_evaluator.batch_pointwise_score(question_list, response_list)
+            # generate new responses
+            prompts = [BASELINE_PROMPT.format(original_answer=curr_r) for curr_r in response_list]
+            new_responses = asyncio.run(self.llm_agent.batch_invoke(prompts))
+
+            for curr_path, new_s, new_e, new_response, pool in zip(sampled_path_list, new_scores, new_explanations, new_responses, pool_list):
+                curr_path.append((new_s, new_e, new_response, None))
+                curr_path[0] = new_s
+                pool.append(curr_path.copy())
+                if len(pool) > pool_size:
+                    heapq.heappop(pool)
+            
+        # find the best path for each question
+        best_path_list = []
+        for pool in pool_list:
+            best_path = find_shortest_of_max_simple(pool)
+            best_path_list.append(best_path.copy())
+        return best_path_list
 
 
 if __name__ == "__main__":
@@ -91,12 +125,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--Budget", type=int, default=20)
     parser.add_argument("--pool_size", type=int, default=3)
-    parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
+    parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
     parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=10)
+    parser.add_argument("--eval_num", type=int, default=805)
     parser.add_argument("--save_analysis_path", type=str, default="results/")
     parser.add_argument("--save_trajectory_path", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/")
 
@@ -108,30 +142,15 @@ if __name__ == "__main__":
     llm_evaluator = JudgeModel(model_name=args.judge_model_name)
     evolve_agent = BaselineEvolveAgent(llm_agent, llm_evaluator)
 
-    dataset = load_dataset(args.data_dir, args.dataset_name, args.response_model_name)
-    dataset_len = len(dataset)
-    logger.info(f"Loaded {dataset_len} questions from {args.dataset_name}")
-    if args.eval_num > dataset_len:
-        eval_num = dataset_len
-    else:
-        dataset = random.sample(dataset, args.eval_num)
-        logger.info(f"Randomly sample {args.eval_num} questions from {dataset_len} questions")
-    logger.info("-"*100)
-
+    dataset = load_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, args.judge_model_name)
+    
     # preprocess the dataset, exclude the perfect score 9 samples
     test_results = []
-    dataset_for_exploration = []
+    selected_idxs = []
     for idx in tqdm(range(len(dataset))):
-        question, response, category = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category']
-        logger.info(f"Question {idx}: {question}")
-        logger.info(f"Response {idx}: {response}")
-
-        original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
-        logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
+        question, response, category, original_score, original_explanation = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category'], dataset[idx]['original_score'], dataset[idx]['original_explanation']
         
         if original_score == 9:
-            logger.info(f"Perfect score 9, skip")
-            # record the results
             test_results.append({
                 "category": category,
                 "instruction": question,
@@ -145,25 +164,51 @@ if __name__ == "__main__":
                 "skip": True,
             })
         elif original_score == -1:
-            logger.info(f"Invalid score, skip")
+            continue
         else:
-            dataset_for_exploration.append((question, response, category, original_score, original_explanation))
+            selected_idxs.append(idx)
+
+    dataset_len = len(dataset)
+    selected_idxs_len = len(selected_idxs)
+    logger.info(f"Loaded {dataset_len} questions from {args.dataset_name}")
+    logger.info(f"Selected {selected_idxs_len} valid questions from {dataset_len} questions")
+    
+    if args.eval_num >= dataset_len:
+        eval_num = dataset_len
+    else:
+        selected_idxs = random.sample(selected_idxs, args.eval_num)
+        logger.info(f"Randomly sample {args.eval_num} questions from {selected_idxs_len} questions")
+    logger.info("-"*100)
+
         
     # Exploration part
     logger.info(f"Skipped {len(test_results)} samples")
-    logger.info(f"Dataset for exploration: {len(dataset_for_exploration)} samples...")
+    logger.info(f"Dataset for exploration: {len(selected_idxs)} samples...")
 
     logger.info(f"Initializing the agent...")
     agent = BaselineEvolveAgent(llm_agent, llm_evaluator)
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
 
-    trajectories = agent.online_learning([item[0] for item in dataset_for_exploration], [item[1] for item in dataset_for_exploration], args.pool_size, args.Budget)
+    # selected samples
+    dataset_for_exploration = [dataset[idx] for idx in selected_idxs]
+    question_list = [item['instruction'] for item in dataset_for_exploration]
+    init_response_list = [item['output'] for item in dataset_for_exploration]
+    original_score_list = [item['original_score'] for item in dataset_for_exploration]
+    original_explanation_list = [item['original_explanation'] for item in dataset_for_exploration]
+    category_list = [item['category'] for item in dataset_for_exploration]
+
+    trajectories = agent.online_learning(question_list, init_response_list, original_score_list, original_explanation_list, args.pool_size, args.Budget)
     
     # keep on record the results
-    for (question, response, category, original_score, original_explanation), trajectory in zip(dataset_for_exploration, trajectories):
+    for question, response, category, original_score, original_explanation, trajectory in zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list, trajectories):
+        logger.info(f"Question: {question}")
+        logger.info(f"Original response: {response}")
+        logger.info(f"Original score: {original_score}")
+        logger.info(f"Original explanation: {original_explanation}")
+        logger.info(f"Trajectory: {trajectory}")
         final_score, final_explanation, final_response, _ = trajectory[-1]
-        exploration_length = len(trajectory)-1
+        exploration_length = len(trajectory)
         test_results.append({
             "category": category,
             "instruction": question,
