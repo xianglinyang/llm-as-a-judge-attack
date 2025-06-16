@@ -55,11 +55,12 @@ class HuggingFaceModel(ModelWrapper):
             pretrained_model_name_or_path=self.model_name_or_path, torch_dtype=self.torch_dtype, device_map=self.device)
         logger.info("model loaded")
 
-    def invoke(self, prompt, max_new_tokens=2048, temperature=0.7, verbose=False):
-        # speed up
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
+    def invoke(self, prompt, system_prompt: str = None, max_new_tokens=2048, temperature=0.7, verbose=False):
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        
         prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
         
         # 3: Tokenize the chat (This can be combined with the previous step using tokenize=True)
@@ -78,10 +79,10 @@ class HuggingFaceModel(ModelWrapper):
         
         return decoded_output
     
-    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7, verbose=False):
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7, verbose=False):
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, max_new_tokens, temperature, verbose)
+            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature, verbose)
             responses.append(response)
         return responses
 
@@ -187,11 +188,15 @@ class OpenAIModel(ModelWrapper):
         self.client = OpenAI()
         self.async_client = AsyncOpenAI()
     
-    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         """Generates model output using OpenAI's API"""
-        messages = [
-            {"role": "user", "content": prompt},
-        ]
+        if system_prompt:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
 
         response = self.client.chat.completions.create(
             model=self.model_name,
@@ -202,28 +207,20 @@ class OpenAIModel(ModelWrapper):
         )
         return response.choices[0].message.content.strip()
     
-    def message_invoke(self, messages: List[Dict[str, str]], max_new_tokens=2048, temperature=0.7) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages,
-            max_tokens=max_new_tokens,
-            n=1,
-            temperature=temperature,
-        )
-        return response.choices[0].message.content.strip()
-    
-    async def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
 
         async def get_completion(prompt_content: str):
             """
             Asynchronously gets a completion from the OpenAI API.
             """
             try:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt_content})
                 response = await self.async_client.chat.completions.create(
                     model=self.model_name,
-                    messages=[
-                        {"role": "user", "content": prompt_content}
-                    ],
+                    messages=messages,
                     max_tokens=max_new_tokens,
                     n=1,
                     temperature=temperature,
@@ -246,20 +243,24 @@ class DashScope(ModelWrapper):
         super().__init__(model_name)
         self.client = OpenAI(api_key=os.environ["DASHSCOPE_API_KEY"], base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
-    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
         response = self.client.chat.completions.create(
             model=self.model_name,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_new_tokens,
             n=1,
             temperature=temperature,
         )
         return response.choices[0].message.content.strip()
     
-    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, max_new_tokens, temperature)
+            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature)
             responses.append(response)
         return responses
 
@@ -273,24 +274,15 @@ class GeminiModel(ModelWrapper):
         self.client = genai.Client()
 
 
-    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         """Generates model output using the Gemini API."""
-        # generation_config = genai.types.GenerationConfig(
-        #     temperature=temperature,
-        #     max_output_tokens=max_new_tokens
-        # )
-        # response = self.client.generate_content(
-        #     prompt,
-        #     generation_config=generation_config,
-        # )
-
         response = self.client.models.generate_content(
             model=self.model_name,
             contents=prompt,
             config=types.GenerateContentConfig(
                 max_output_tokens=max_new_tokens,
                 temperature=temperature,
-                # system_instruction='you are a story teller for kids under 5 years old',
+                system_instruction=system_prompt,
                 # top_k= 2,
                 # top_p= 0.5,
                 # response_mime_type= 'application/json',
@@ -300,7 +292,7 @@ class GeminiModel(ModelWrapper):
         )
         return response.text.strip()
     
-    async def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
 
         async def get_completion(prompt_content: str):
             """
@@ -313,6 +305,7 @@ class GeminiModel(ModelWrapper):
                     config=types.GenerateContentConfig(
                         max_output_tokens=max_new_tokens,
                         temperature=temperature,
+                        system_instruction=system_prompt,
                     )
                 )
                 
@@ -334,18 +327,22 @@ class TogetherModel(ModelWrapper):
         super().__init__(model_name)
         self.client = Together(api_key=os.environ["TOGETHER_API_KEY"])
 
-    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         """Generates model output using the TogetherAI API."""
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
         response = self.client.chat.completions.create(
             model=self.model_name,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             )
         return response.choices[0].message.content
     
-    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, max_new_tokens, temperature)
+            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature)
             responses.append(response)
         return responses
 
@@ -355,10 +352,13 @@ class ClaudeModel(ModelWrapper):
         super().__init__(model_name)
         self.client = Anthropic()
 
-    def invoke(self, prompt: str, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         """Generates model output using the Anthropic Messages API."""
-
-        message = self.client.messages.create(
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+        output = self.client.messages.create(
             model=self.model_name,
             max_tokens=max_new_tokens,
             temperature=temperature,
@@ -369,12 +369,12 @@ class ClaudeModel(ModelWrapper):
                 }
             ]
         )
-        return message.content[0].text.strip()
+        return output.content[0].text.strip()
     
-    def batch_invoke(self, prompts: List[str], max_new_tokens=2048, temperature=0.7) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, max_new_tokens, temperature)
+            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature)
             responses.append(response)
         return responses
 
