@@ -219,7 +219,7 @@ class ContextualBanditAgent(EvolveAgent):
             context_x_list = context_x_list.reshape(len(init_response_list), self.n_features, 1)
             for arm_idx in range(self.n_arms):
                 strategy_list = [Bias_types[arm_idx]] * len(init_response_list)
-                new_responses = self.batch_principle_guided_mutation(init_response_list, strategy_list)
+                new_responses = self.bias_modificatior.batch_principle_guided_mutation(init_response_list, strategy_list)
                 reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_responses, original_score_list)
 
                 for i in range(len(init_response_list)):
