@@ -387,7 +387,7 @@ def load_model(model_name: str, use_vllm: bool = False, **kwargs) -> ModelWrappe
             raise ValueError(f"Model {model_name} not implemented!")
         return OpenAIModel(model_name, **kwargs)
     elif "gemini" in model_name:
-        available_models = ["gemini-1.5-pro", "gemini-1.5-flash"]
+        available_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-preview-05-20", "gemini-2.5-pro-preview-06-05","gemini-2.0-flash-lite", "gemini-1.5-flash-8b"]
         if model_name not in available_models:
             raise ValueError(f"Model {model_name} not implemented!")
         return GeminiModel(model_name, **kwargs)
