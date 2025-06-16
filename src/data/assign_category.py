@@ -10,12 +10,14 @@ Dataset for evaluation:
 '''
 import json
 import os
-from tqdm import tqdm
+import logging
 
 from src.llm_zoo import OpenAIModel
 from src.utils import str2json
 from src.logging_utils import setup_logging
 from src.data.data_utils import load_metadata
+
+logger = logging.getLogger(__name__)
 
 template='''Given a question, please categorize it to one of the following categories:
 
@@ -48,18 +50,21 @@ CATEGORIES = [
     "Others"
 ]
 
-def assign_category(save_dir, dataset_name):
+def assign_category(save_dir, dataset_name, assign_model_name="gpt-4o-mini"):
     # load the dataset
     metadata = load_metadata(save_dir, dataset_name)
     
     # check if the dataset is already assigned category
     if "category" in metadata[0]:
+        logger.info(f"Dataset {dataset_name} is already assigned category")
         return metadata
     
-    model = OpenAIModel("gpt-4o-mini")
-    for item in tqdm(metadata):
-        prompt = template.format(item["instruction"])
-        response = model.invoke(prompt)
+    model = OpenAIModel(assign_model_name)
+    # batch invoke
+    prompts = [template.format(item["instruction"]) for item in metadata]
+    responses = model.batch_invoke(prompts)
+    
+    for item, response in zip(metadata, responses):
         try:
             category = int(str2json(response)["category"])
             item["category"] = CATEGORIES[category - 1]
