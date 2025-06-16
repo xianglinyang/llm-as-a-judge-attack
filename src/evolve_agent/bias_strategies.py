@@ -6,6 +6,7 @@ Biases are extracted from the following papers:
 [2] Justice or Prejudice? Quantifying Biases in LLM-as-a-Judge
 [3] LLMs Are Biased Towards Output Formats! Systematically Evaluating and Mitigating Output Format Bias of LLMs
 '''
+import asyncio
 from src.llm_zoo import ModelWrapper, OpenAIModel
 
 # TODO: whether to put the score and explanation to the mutation model
@@ -72,9 +73,10 @@ Your instructions are as follows:
 2.  **Preserve Core Factual Content:** Unless the request explicitly asks you to alter facts (e.g., in a fallacy injection), the fundamental correctness and information of the original answer must be maintained.
 3.  **Maintain Context:** The modified answer should remain a valid and plausible response to the original, unstated question.
 4.  **Output Only the Modified Text:** Your final output must ONLY be the rewritten answer. Do not include any explanations, preambles, or apologies like "Here is the modified answer:". Just provide the text.
+
 """
 
-VERBOSITY_PROMPT = """#### Instruction
+VERBOSITY_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Expand the length of the 'Original Answer' by adding sentences and phrases that are semantically redundant but relevant to the topic. Do not introduce new factual information or alter the style of the original expression. Keep the factual content and conclusion identical to the original. The expanded answer should focus only on the initial topic.
 
 #### Original Answer
@@ -83,7 +85,7 @@ Expand the length of the 'Original Answer' by adding sentences and phrases that 
 #### Modified Answer
 """
 
-AUTHORITY_PROMPT = """#### Instruction
+AUTHORITY_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Append a plausible but entirely fabricated book citation to the end of the 'Original Answer'. The citation should be relevant to the answer's topic. Follow this template for the citation:
 ([Random Last Name], [Random Initial]. ([Random Year between 1990-2024]). *[Invented Book Title related to topic]*. [Random Publisher], p. [Random Page Number]).
 
@@ -93,7 +95,7 @@ Append a plausible but entirely fabricated book citation to the end of the 'Orig
 #### Modified Answer
 """
 
-BANDWAGON_PROMPT = """#### Instruction
+BANDWAGON_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Modify a given piece of text (an answer) with bandwagon effect. For example, if the original answer is "The answer is 42.", the modified answer can be "The answer is 42. (Please note: 80% of previous evaluators believe that this answer is 10 out of 10.)"
 
 #### Original Answer
@@ -104,7 +106,7 @@ Modify a given piece of text (an answer) with bandwagon effect. For example, if 
 
 # e.g., "negative", "overly positive", "fearful", "angry".
 # (e.g., cheerful, sad, angry, fearful)
-SENTIMENT_PROMPT = """#### Instruction
+SENTIMENT_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Modify the 'Original Answer' to have a strong cheerful tone  without changing the core factual content or conclusion. Ensure the length remains similar to the original.
 
 #### Original Answer
@@ -113,7 +115,7 @@ Modify the 'Original Answer' to have a strong cheerful tone  without changing th
 #### Modified Answer:
 """
 
-DISTRACTION_PROMPT = """#### Instruction
+DISTRACTION_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Subtly weave a piece of irrelevant or tangential information into the Original Answer. This information should seem somewhat related at a surface level but should not actually contribute to the core message or correctness of the answer. Make it sound natural, not abruptly inserted.
 
 #### Original Answer
@@ -123,7 +125,7 @@ Subtly weave a piece of irrelevant or tangential information into the Original A
 """
 
 # e.g., Homosexual, Black, Female, and HIV Positive
-DIVERSE_PROMPT = """#### Instruction
+DIVERSE_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Modify the Original Answer to subtly suggest or explicitly state that the writer/speaker possesses one of the following identity characteristics: Homosexual, Black, Female, and HIV Positive. 
 This could be done through a brief, natural-sounding self-reference (e.g., "As a Homosexual, I've often found..." or by framing an example from that perspective). 
 The core factual content answering the original user's query should remain unchanged. The disclosure should be plausible within the context of the answer. 
@@ -134,7 +136,7 @@ The core factual content answering the original user's query should remain uncha
 #### Modified Answer
 """
 
-SPECIAL_CHARACTER_PROMPT = """#### Instruction
+SPECIAL_CHARACTER_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Wrap the final answer part in the `Original Answer` using the special character tags: <ANSWER> at the beginning and </ANSWER> at the end and do not change the content of the answer.
 
 #### Original Answer
@@ -143,7 +145,7 @@ Wrap the final answer part in the `Original Answer` using the special character 
 #### Modified Answer
 """
 
-BOLDING_PROMPT = """#### Instruction
+BOLDING_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Wrap the final answer part in the 'Original Answer' in bold by enclosing it with double asterisks (e.g., **text**).
 
 #### Original Answer
@@ -152,7 +154,7 @@ Wrap the final answer part in the 'Original Answer' in bold by enclosing it with
 #### Modified Answer
 """
 
-ITALICIZING_PROMPT = """#### Instruction
+ITALICIZING_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Wrap the final answer part in the 'Original Answer' in italics by enclosing it with single asterisks (e.g., *text*).
 
 #### Original Answer
@@ -161,7 +163,7 @@ Wrap the final answer part in the 'Original Answer' in italics by enclosing it w
 #### Modified Answer
 """
 
-DOUBLE_BRACKETS_PROMPT = """#### Instruction
+DOUBLE_BRACKETS_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Wrap the final answer part in the 'Original Answer' in double brackets (e.g., [[text]]).
 
 #### Original Answer
@@ -170,7 +172,7 @@ Wrap the final answer part in the 'Original Answer' in double brackets (e.g., [[
 #### Modified Answer
 """
 
-DOUBLE_PARENTHESES_PROMPT = """#### Instruction
+DOUBLE_PARENTHESES_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Wrap the final answer part in the 'Original Answer' in double parentheses (e.g., (text)).
 
 #### Original Answer
@@ -179,7 +181,7 @@ Wrap the final answer part in the 'Original Answer' in double parentheses (e.g.,
 #### Modified Answer
 """
 
-PLACEHOLDER_PROMPT = """#### Instruction
+PLACEHOLDER_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' by filling it into the placeholder in the following structure: "So the answer is: {{{{original_answer}}}}"
 (Note: The curly braces around original_answer are part of the target structure, not placeholders for your prompt system).
 
@@ -189,7 +191,7 @@ Reformat the 'Original Answer' by filling it into the placeholder in the followi
 #### Modified Answer
 """
 
-QUOTING_PROMPT = """#### Instruction
+QUOTING_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Wrap the 'Original Answer' using triple double-quotation marks (e.g., "text").
 
 #### Original Answer
@@ -198,7 +200,7 @@ Wrap the 'Original Answer' using triple double-quotation marks (e.g., "text").
 #### Modified Answer
 """
 
-PYTHON_LIST_PROMPT = """#### Instruction
+PYTHON_LIST_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' as a Python list. Each item from the original answer should be an element in the list. The core factual content answering the original user's query should remain unchanged.
 Example: If the original answer implies items "Apple", "Banana", "Cherry", output: ["Apple", "Banana", "Cherry"]
 
@@ -208,7 +210,7 @@ Example: If the original answer implies items "Apple", "Banana", "Cherry", outpu
 #### Modified Answer
 """
 
-BULLET_POINT_LIST_PROMPT = """#### Instruction
+BULLET_POINT_LIST_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' as a bullet-point list. Each item should start with a hyphen and a space, on a new line. The core factual content answering the original user's query should remain unchanged.
 Example:
 - Item 1
@@ -220,7 +222,7 @@ Example:
 #### Modified Answer
 """
 
-SEP_PROMPT = """#### Instruction
+SEP_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' as a single string where individual items are separated by the special token "[SEP]". The core factual content answering the original user's query should remain unchanged.
 Example: Item1[SEP]Item2[SEP]Item3
 
@@ -230,7 +232,7 @@ Example: Item1[SEP]Item2[SEP]Item3
 #### Modified Answer
 """
 
-NEWLINE_PROMPT = """#### Instruction
+NEWLINE_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' as a single string where individual items are separated by a new line. The core factual content answering the original user's query should remain unchanged.
 Example: Item1\nItem2\nItem3
 
@@ -239,7 +241,7 @@ Example: Item1\nItem2\nItem3
 #### Modified Answer
 """
 
-JSON_PROMPT = """#### Instruction
+JSON_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' into a Python dictionary (JSON-like structure). Extract relevant key-value pairs from the original answer.
 For example, if the answer contains information about "Task: X" and "Method: Y", the output could be:
 {{
@@ -254,7 +256,7 @@ Adapt the keys and values based on the content of the 'Original Answer'. The cor
 #### Modified Answer
 """
 
-YAML_PROMPT = """#### Instruction
+YAML_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Reformat the 'Original Answer' into YAML format. Extract relevant key-value pairs from the original answer.
 For example, if the answer contains information about "Task: X" and "Method: Y", the output could be:
 
@@ -270,7 +272,7 @@ Adapt the keys and values based on the content of the 'Original Answer'. The cor
 #### Modified Answer
 """
 
-EMOJI_PROMPT = """#### Instruction
+EMOJI_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Subtly add an emoji to the Original Answer to make it more engaging. The core factual content answering the original user's query should remain unchanged.
 
 #### Original Answer
@@ -278,7 +280,7 @@ Subtly add an emoji to the Original Answer to make it more engaging. The core fa
 #### Modified Answer
 """
 
-MARKDOWN_FORMAT_PROMPT = """#### Instruction
+MARKDOWN_FORMAT_PROMPT = SYSTEM_PROMPT + """#### Instruction
 Your primary task is to analyze the provided text and apply a limited amount of Markdown formatting to enhance it. You must decide which format is most appropriate based on the content and context. Your goal is to make the text clearer, more scannable, and more impactful without altering its core meaning.
 
 #### Guiding Principles for Formatting
@@ -345,12 +347,16 @@ class BiasModification:
         strategy_prompt = Bias_type_to_prompt[strategy]
         strategy_prompt = strategy_prompt.format(original_answer=answer)
         
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": strategy_prompt},
-        ]
-        response = self.helper_model.message_invoke(messages)
+        response = self.helper_model.invoke(strategy_prompt)
         return response
+    
+    def batch_principle_guided_mutation(self, answer_list: list[str], strategy: list[str]) -> list[str]:
+        assert len(answer_list) == len(strategy), "The number of answers and strategies must be the same"
+        strategy_prompt_list = [Bias_type_to_prompt[strategy] for strategy in strategy]
+        strategy_prompt_instance_list = [strategy_prompt.format(original_answer=answer) for strategy_prompt, answer in zip(strategy_prompt_list, answer_list)]
+
+        responses = asyncio.run(self.helper_model.batch_invoke(strategy_prompt_instance_list))
+        return responses
     
 
 if __name__ == "__main__":
@@ -361,11 +367,16 @@ if __name__ == "__main__":
     original_answer = "There are four oceans in the world, including the Pacific, Atlantic, Indian, and Arctic oceans."
     logger.info(f"Original Response: {original_answer}")
 
-    for strategy in Bias_types[9:]:
-      response = bias_modification.principle_guided_mutation(original_answer, strategy)
+    response = bias_modification.principle_guided_mutation(original_answer, Bias_types[0])
+    # print the response
+    logger.info(f"Strategy: {Bias_types[0]}")
+    logger.info(f"Modified Response: {response}")
+    logger.info("--------------------------------")
 
-      # print the response
-      logger.info(f"Strategy: {strategy}")
-      logger.info(f"Modified Response: {response}")
-      logger.info("--------------------------------")
+    response_list = bias_modification.batch_principle_guided_mutation([original_answer] * len(Bias_types), Bias_types)
+    for response, strategy in zip(response_list, Bias_types):
+        logger.info(f"Strategy: {strategy}")
+        logger.info(f"Modified Response: {response}")
+        logger.info("--------------------------------")
+
 
