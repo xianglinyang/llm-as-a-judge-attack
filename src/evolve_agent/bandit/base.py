@@ -6,19 +6,14 @@ import numpy as np
 import random
 import heapq
 import logging
-import argparse
 from tqdm import tqdm
-import os
-import json
 from abc import abstractmethod
 from sklearn.utils import shuffle
-from typing import Callable
 
 from src.evolve_agent import EvolveAgent
 from src.llm_zoo import ModelWrapper
 from src.text_encoder import TextEncoder
 from src.llm_evaluator import JudgeModel
-from src.text_encoder import TextEncoder
 from src.evolve_agent.utils import find_shortest_of_max_simple
 from src.evolve_agent.bias_strategies import Bias_types, BiasModification
 
@@ -77,6 +72,20 @@ class ContextualBanditAgent(EvolveAgent):
         pass
 
     @abstractmethod
+    def batch_predict(self, context_x_list):
+        """
+        Predicts the score for each arm given the context.
+        """
+        pass
+
+    @abstractmethod
+    def batch_choose_arm(self, context_x_list):
+        """
+        Chooses an arm based on the specific strategy.
+        """
+        pass
+
+    @abstractmethod
     def update(self, chosen_arm_idx, context_x, reward):
         """
         Updates the parameters for the chosen arm.
@@ -93,6 +102,12 @@ class ContextualBanditAgent(EvolveAgent):
         embedding = self.embedding_model.encode(text)
         return embedding
     
+    def get_context_x_batch(self, question_list: list[str], response_list: list[str]):
+        texts = ["Question: " + question + "\n" + "Response: " + response for question, response in zip(question_list, response_list)]
+        embeddings = self.embedding_model.batch_encode(texts)
+        # shape: (n_samples, n_features)
+        return embeddings
+    
     def get_reward(self, question: str, response: str, original_score: float):
         s, e = self.llm_evaluator.pointwise_score(question, response)
         if self.reward_type == "relative":
@@ -103,34 +118,45 @@ class ContextualBanditAgent(EvolveAgent):
             raise ValueError(f"Invalid reward type: {self.reward_type}")
         return reward, s, e
     
-    def explore(self, question, init_response, pool_size: int, Budget: int, cold_start: bool):
+    def get_batch_reward(self, question_list: list[str], response_list: list[str], original_score_list: list[float]):
+        s_list, e_list = self.llm_evaluator.batch_pointwise_score(question_list, response_list)
+        if self.reward_type == "relative":
+            reward_list = [s - original_score for s, original_score in zip(s_list, original_score_list)]
+        elif self.reward_type == "absolute":
+            reward_list = s_list
+        else:
+            raise ValueError(f"Invalid reward type: {self.reward_type}")
+        return reward_list, s_list, e_list
+    
+    def explore(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int, cold_start: bool):
         if Budget<self.n_arms:
             raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
         # init the response pool
         pool = []
-        s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append([s, (s, e, init_response, None)])
+        pool.append([original_score, (original_score, original_explanation, init_response, None)])
 
         curr_step = 0
         if cold_start:
+            curr_path = pool[0].copy()
+            curr_s, curr_e, curr_r, _ = curr_path[-1]
+            context_x = self.get_context_x(question, init_response)
+            context_x = context_x.reshape(-1, 1)
             for arm_idx in range(self.n_arms):
-                context_x = self.get_context_x(question, init_response)
-                context_x = context_x.reshape(-1, 1)
-
+        
                 strategy = Bias_types[arm_idx]
 
                 new_response = self.bias_modificatior.principle_guided_mutation(init_response, strategy)
 
-                reward, new_score, new_explanation = self.get_reward(question, new_response, s)
+                reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
                 self.update(arm_idx, context_x, reward)
-                
-                pool.append([s, (s, e, init_response, None), (new_score, new_explanation, new_response, strategy)])
+
+                pool.append([new_score, (original_score, original_explanation, init_response, None), (new_score, new_explanation, new_response, strategy)])
                 if len(pool) > pool_size:
                     heapq.heappop(pool)
 
                 # record the results
                 logger.info(f"Iteration {arm_idx}:")
-                logger.info(f"Original score: {s}, explanation: {e}")
+                logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
                 logger.info(f"New score: {new_score}, explanation: {new_explanation}")
                 logger.info(f"Chosen arm: {self.strategy_list[arm_idx]}")
                 logger.info(f"New response: {new_response}\n")
@@ -174,14 +200,84 @@ class ContextualBanditAgent(EvolveAgent):
             print(f"New response: {new_response}\n")
 
         best_path = find_shortest_of_max_simple(pool)
-        # final_score, final_explanation, final_response = best_path[-1]
         return best_path
     
-    def explore_with_random_arm(self, question, init_response, pool_size: int, Budget: int):
+    def batch_explore(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, cold_start: bool):
+        if Budget<self.n_arms:
+            raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
+        
+        pool_list = []
+        for init_response, original_score, original_explanation in zip(init_response_list, original_score_list, original_explanation_list):
+            pool = []
+            pool.append([original_score, (original_score, original_explanation, init_response, None)])
+            pool_list.append(pool.copy())
+
+        curr_step = 0
+        if cold_start:
+            # shape: (n_samples, n_features)
+            context_x_list = self.get_context_x_batch(question_list, init_response_list)
+            context_x_list = context_x_list.reshape(len(init_response_list), self.n_features, 1)
+            for arm_idx in range(self.n_arms):
+                strategy_list = [Bias_types[arm_idx]] * len(init_response_list)
+                new_responses = self.batch_principle_guided_mutation(init_response_list, strategy_list)
+                reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_responses, original_score_list)
+
+                for i in range(len(init_response_list)):
+                    self.update(arm_idx, context_x_list[i], reward_list[i])
+                
+                for pool, new_s, new_e, new_r, new_strategy, original_score, original_explanation, init_response in zip(pool_list, new_score_list, new_explanation_list, new_responses, strategy_list, original_score_list, original_explanation_list, init_response_list):
+                    pool.append([new_s, (original_score, original_explanation, init_response, None), (new_s, new_e, new_r, new_strategy)])
+                    if len(pool) > pool_size:
+                        heapq.heappop(pool)
+                
+                curr_step += 1
+
+        for t in range(curr_step, Budget):
+            # 1. Sample a context from the dataset
+            response_list = []
+            sampled_path_list = []
+            for pool in pool_list:
+                idx = random.choice(range(len(pool)))
+                curr_path = pool[idx].copy()
+                sampled_path_list.append(curr_path)
+                response_list.append(curr_path[-1][2])
+
+            context_x_list = self.get_context_x_batch(question_list, response_list)
+            context_x_list = context_x_list.reshape(len(response_list), self.n_features, 1)
+
+            # 2. Choose an arm
+            chosen_arm_list = self.batch_choose_arm(context_x_list)
+
+            # 3. get new response
+            strategy_list = [Bias_types[chosen_arm] for chosen_arm in chosen_arm_list]
+            new_response_list = self.batch_principle_guided_mutation(response_list, strategy_list)
+            
+            # 4. Get the reward
+            reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_response_list, original_score_list)
+
+            # 5. Update the policy
+            for i in range(len(response_list)):
+                self.update(chosen_arm_list[i], context_x_list[i], reward_list[i])
+
+            # 5.1 update the pool with heapq
+            for curr_path, new_s, new_e, new_r, new_strategy, pool in zip(sampled_path_list, new_score_list, new_explanation_list, new_response_list, strategy_list, pool_list):
+                curr_path.append((new_s, new_e, new_r, new_strategy))
+                curr_path[0] = new_s
+                pool.append(curr_path.copy())
+                if len(pool) > pool_size:
+                    heapq.heappop(pool)
+        
+        # 6. find the best path for each question
+        best_path_list = []
+        for pool in pool_list:
+            best_path = find_shortest_of_max_simple(pool)
+            best_path_list.append(best_path.copy())
+        return best_path_list
+    
+    def explore_with_random_arm(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int):
         # init the response pool
         pool = []
-        s, e = self.llm_evaluator.pointwise_score(question, init_response)
-        pool.append([s, (s, e, init_response, None)])
+        pool.append([original_score, (original_score, original_explanation, init_response, None)])
         
         for t in range(Budget):
             # 1. Sample a context from the dataset
@@ -197,7 +293,7 @@ class ContextualBanditAgent(EvolveAgent):
             new_response = self.bias_modificatior.principle_guided_mutation(curr_r, strategy)
 
             # 4. Get the reward
-            reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
+            new_score, new_explanation = self.llm_evaluator.pointwise_score(question, new_response)
 
             # 5.1 update the pool with heapq
             curr_path.append((new_score, new_explanation, new_response, strategy))
@@ -218,11 +314,54 @@ class ContextualBanditAgent(EvolveAgent):
         best_path = find_shortest_of_max_simple(pool)
         return best_path
     
-    def online_learning(self, question_list, init_response_list, pool_size: int, Budget: int, shuffle_data: bool = True, init_policy: bool = True):
+    def batch_explore_with_random_arm(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int):
+        pool_list = []
+        for init_response, original_score, original_explanation in zip(init_response_list, original_score_list, original_explanation_list):
+            pool = []
+            pool.append([original_score, (original_score, original_explanation, init_response, None)])
+            pool_list.append(pool.copy())
+
+        for t in range(Budget):
+            # 1. Sample a context from the dataset
+            response_list = []
+            sampled_path_list = []
+            for pool in pool_list:
+                idx = random.choice(range(len(pool)))
+                curr_path = pool[idx].copy()
+                sampled_path_list.append(curr_path)
+                response_list.append(curr_path[-1][2])
+
+            # 2. Choose an arm
+            chosen_arm_list = [random.choice(range(self.n_arms))] * len(response_list)
+
+            # 3. get new response
+            strategy_list = [Bias_types[chosen_arm] for chosen_arm in chosen_arm_list]
+            new_response_list = self.batch_principle_guided_mutation(response_list, strategy_list)
+            
+            # 4. Get the score
+            new_score_list, new_explanation_list = self.llm_evaluator.batch_pointwise_score(question_list, new_response_list)
+
+            # 5.1 update the pool with heapq
+            for curr_path, new_s, new_e, new_r, new_strategy, pool in zip(sampled_path_list, new_score_list, new_explanation_list, new_response_list, strategy_list, pool_list):
+                curr_path.append((new_s, new_e, new_r, new_strategy))
+                curr_path[0] = new_s
+                pool.append(curr_path.copy())
+                if len(pool) > pool_size:
+                    heapq.heappop(pool)
+        
+        # 6. find the best path for each question
+        best_path_list = []
+        for pool in pool_list:
+            best_path = find_shortest_of_max_simple(pool)
+            best_path_list.append(best_path.copy())
+        return best_path_list
+
+    
+    def online_learning(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, shuffle_data: bool = True, init_policy: bool = True):
         # shuffle the question and init_response (Optional)
         if shuffle_data:
             logger.info(f"Shuffling the question and init_response")
-            question_list, init_response_list = shuffle(question_list, init_response_list)
+            question_list, init_response_list, original_score_list, original_explanation_list = shuffle(question_list, init_response_list, original_score_list, original_explanation_list)
         
         if init_policy:
             logger.info(f"Initializing the policy model")
@@ -231,8 +370,8 @@ class ContextualBanditAgent(EvolveAgent):
         explore_trajectories = []
         # online learning
         logger.info(f"Online learning started")
-        for t, (question, init_response) in tqdm(enumerate(zip(question_list, init_response_list))):
-            explore_trajectory = self.explore(question, init_response, pool_size, Budget, cold_start=True if t==0 else False)
+        for t, (question, init_response, original_score, original_explanation) in tqdm(enumerate(zip(question_list, init_response_list, original_score_list, original_explanation_list))):
+            explore_trajectory = self.explore(question, init_response, original_score, original_explanation, pool_size, Budget, cold_start=True if t==0 else False)
             explore_trajectories.append(explore_trajectory)
             logger.info(f"Online learning iteration {t} finished")
             logger.info("-"*100)
