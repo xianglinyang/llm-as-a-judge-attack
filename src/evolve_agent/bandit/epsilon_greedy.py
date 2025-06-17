@@ -170,7 +170,7 @@ if __name__ == "__main__":
     for idx in tqdm(range(len(dataset))):
         question, response, category, original_score, original_explanation = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category'], dataset[idx]['original_score'], dataset[idx]['original_explanation']
         
-        if original_score == 9:
+        if original_score >= 9:
             test_results.append({
                 "category": category,
                 "instruction": question,
