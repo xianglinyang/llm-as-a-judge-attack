@@ -236,6 +236,8 @@ if __name__ == "__main__":
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
 
+    start_time = time.time()
+
     trajectories = []
     if args.test_mode == "online":
         logger.info(f"Running online learning...")
@@ -272,6 +274,8 @@ if __name__ == "__main__":
             "skip": False,
         })
     
+    end_time = time.time()
+    
     # record the evaluation results
     analysis = {
         "strategy": "Thompson Sampling",
@@ -288,6 +292,7 @@ if __name__ == "__main__":
         "reward_type": args.reward_type,
         "v_ts": args.v_ts,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "time_taken": end_time - start_time,
         "categories": {}
     }
     
@@ -349,3 +354,5 @@ if __name__ == "__main__":
         json.dump(analysis, f)
     logger.info(f"Trajectories saved to {save_path}")
     logger.info("-"*100)
+
+    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {args.eval_num} eval num")

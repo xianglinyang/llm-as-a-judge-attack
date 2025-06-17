@@ -8,6 +8,7 @@ import os
 import json
 import numpy as np
 import asyncio
+import time
 
 from src.evolve_agent import EvolveAgent
 from src.llm_zoo import ModelWrapper, load_model
@@ -198,6 +199,8 @@ if __name__ == "__main__":
     original_explanation_list = [item['original_explanation'] for item in dataset_for_exploration]
     category_list = [item['category'] for item in dataset_for_exploration]
 
+    start_time = time.time()
+
     trajectories = agent.online_learning(question_list, init_response_list, original_score_list, original_explanation_list, args.pool_size, args.Budget)
     
     # keep on record the results
@@ -221,7 +224,8 @@ if __name__ == "__main__":
             "exploration_length": exploration_length,
             "skip": False,
         })
-    
+    end_time = time.time()
+
     # record the evaluation results
     analysis = {
         "strategy": "Baseline Prompt",
@@ -234,6 +238,7 @@ if __name__ == "__main__":
         "pool_size": args.pool_size,
         "eval_num": args.eval_num,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "time_taken": end_time - start_time,
     }
     # Analyze the test result for each category
     for category in CATEGORIES:
@@ -292,3 +297,5 @@ if __name__ == "__main__":
         json.dump(analysis, f)
     logger.info(f"Trajectories saved to {save_path}")
     logger.info("-"*100)
+
+    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {args.eval_num} eval num")
