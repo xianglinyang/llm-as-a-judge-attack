@@ -348,10 +348,9 @@ if __name__ == "__main__":
     # save the trajectories
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
     os.makedirs(args.save_trajectory_path, exist_ok=True)
-    save_path = os.path.join(args.save_trajectory_path, f"ts_{args.test_mode}_{timestamp}.json")
-    analysis["trajectory_path"] = save_path
+    save_path = os.path.join(args.save_trajectory_path, f"ts_{args.test_mode}_{args.dataset_name}_{timestamp}.json")
     with open(save_path, "w") as f:
-        json.dump(analysis, f)
+        json.dump(trajectories, f)
     logger.info(f"Trajectories saved to {save_path}")
     logger.info("-"*100)
 
