@@ -11,6 +11,7 @@ Dataset for evaluation:
 import json
 import os
 import logging
+import asyncio
 
 from src.llm_zoo import OpenAIModel
 from src.utils import str2json
@@ -62,7 +63,7 @@ def assign_category(save_dir, dataset_name, assign_model_name="gpt-4o-mini"):
     model = OpenAIModel(assign_model_name)
     # batch invoke
     prompts = [template.format(item["instruction"]) for item in metadata]
-    responses = model.batch_invoke(prompts)
+    responses = asyncio.run(model.batch_invoke(prompts))
     
     for item, response in zip(metadata, responses):
         try:
@@ -87,10 +88,10 @@ if __name__ == "__main__":
     setup_logging(task_name="assign_category")
 
     dataset_list = [
-        "AlpacaEval",
+        # "AlpacaEval",
         "ArenaHard",
         "MTBench",
     ]
 
     for dataset_name in dataset_list:
-        assign_category(data_dir, dataset_name)
+        assign_category(data_dir, dataset_name, assign_model_name="gpt-4o-mini")
