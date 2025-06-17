@@ -26,7 +26,7 @@ Below is the output of the task:
 ```json
 {{
     "feedback": "Write the verbal explanation of the score here.",
-    "score": "Write the numeric score in 1-9 here."
+    "score": "Give the numeric score from 1 to 9 here. 1 is the lowest score and 9 is the highest score."
 }}
 ```
 
