@@ -245,19 +245,19 @@ class ContextualBanditAgent(EvolveAgent):
             context_x_list = self.get_context_x_batch(question_list, response_list)
             context_x_list = context_x_list.reshape(len(response_list), self.n_features, 1)
 
-            # 2. Choose an arm
+            # 2. Choose an arm, shape: (n_samples, 1)
             chosen_arm_list = self.batch_choose_arm(context_x_list)
 
             # 3. get new response
-            strategy_list = [Bias_types[chosen_arm] for chosen_arm in chosen_arm_list]
-            new_response_list = self.batch_principle_guided_mutation(response_list, strategy_list)
+            strategy_list = [Bias_types[chosen_arm[0]] for chosen_arm in chosen_arm_list]
+            new_response_list = self.bias_modificatior.batch_principle_guided_mutation(response_list, strategy_list)
             
             # 4. Get the reward
             reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_response_list, original_score_list)
 
             # 5. Update the policy
             for i in range(len(response_list)):
-                self.update(chosen_arm_list[i], context_x_list[i], reward_list[i])
+                self.update(chosen_arm_list[i][0], context_x_list[i], reward_list[i])
 
             # 5.1 update the pool with heapq
             for curr_path, new_s, new_e, new_r, new_strategy, pool in zip(sampled_path_list, new_score_list, new_explanation_list, new_response_list, strategy_list, pool_list):
