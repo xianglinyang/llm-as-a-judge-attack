@@ -30,7 +30,7 @@ def get_response_from_model(save_dir, dataset_name, response_model_name, **kwarg
     questions = [item["instruction"] for item in metadata]
 
     response_model = load_model(response_model_name, **kwargs)
-    if "gpt" in response_model_name:
+    if "gpt" in response_model_name or "gemini" in response_model_name:
         responses = asyncio.run(response_model.batch_invoke(questions))
     else:
         responses = response_model.batch_invoke(questions)
@@ -63,34 +63,30 @@ if __name__ == "__main__":
         "ArenaHard",
         "MTBench",
     ]
-    # vllm based models
-    vllm_model_name_list = [
-        # "meta-llama/Llama-3.2-1B-Instruct",
-        # "meta-llama/Llama-3.2-3B-Instruct",
-        "meta-llama/Llama-3.1-8B-Instruct",
-        # "google/gemma-3-1b-it",
-        # "google/gemma-3-4b-it",
-        "google/gemma-3-12b-it",
-        "google/gemma-3-27b-it",
-        "mistralai/Mistral-7B-Instruct-v0.2"
-        "mistralai/Mixtral-8x7B-Instruct-v0.1"
-    ]
+    # # vllm based models
+    # vllm_model_name_list = [
+    #     # "meta-llama/Llama-3.2-1B-Instruct",
+    #     # "meta-llama/Llama-3.2-3B-Instruct",
+    #     "meta-llama/Llama-3.1-8B-Instruct",
+    #     # "google/gemma-3-1b-it",
+    #     # "google/gemma-3-4b-it",
+    #     "google/gemma-3-12b-it",
+    #     "google/gemma-3-27b-it",
+    #     "mistralai/Mistral-7B-Instruct-v0.2"
+    #     "mistralai/Mixtral-8x7B-Instruct-v0.1"
+    # ]
 
-    for dataset_name in dataset_list:
-        for model_name in vllm_model_name_list:
-            get_response_from_model(data_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8, gpu_memory_utilization=0.8)
+    # for dataset_name in dataset_list:
+    #     for model_name in vllm_model_name_list:
+    #         get_response_from_model(data_dir, dataset_name, model_name, use_vllm=True, tensor_parallel_size=8, gpu_memory_utilization=0.8)
 
     # api based models
     api_model_name_list = [
         # "gpt-4o-mini",
-        # "gpt-4o",
-        # "gpt-4.1",
-        "gpt-4.1-mini",
-        # "gpt-4o-2024-05-13",
-        # "gpt-4-turbo-2024-04-09",
-        # "gpt-4-0613",
-        # "gemini-1.5-pro",
-        # "gemini-1.5-flash"
+        # "gpt-4.1-mini",
+        # "gpt-4.1-nano",
+        # "gemini-1.5-flash-8b",
+        # "gemini-1.5-flash-8b"
     ]
 
     for dataset_name in dataset_list:

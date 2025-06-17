@@ -32,17 +32,20 @@ if __name__ == "__main__":
     setup_logging(task_name="preprocess_dataset_for_exploration")
     
     judge_model_list = [
-        # "gemini-2.0-flash",
-        "gpt-4o",
+        "gemini-2.0-flash",
+        # "gpt-4o",
         # "gpt-4.1",
     ]
     dataset_list = [
-        # "AlpacaEval",
+        "AlpacaEval",
         "ArenaHard",
-        # "MTBench",
+        "MTBench",
     ]
     response_model_list = [
-        "gpt-4o-mini"
+        # "gpt-4o-mini"
+        "gpt-4.1-mini",
+        # "gpt-4.1-nano",
+        # "gemini-1.5-flash-8b",
     ]
 
     for dataset_name in dataset_list:
