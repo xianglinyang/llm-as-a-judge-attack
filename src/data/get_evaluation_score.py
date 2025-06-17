@@ -32,14 +32,14 @@ if __name__ == "__main__":
     setup_logging(task_name="preprocess_dataset_for_exploration")
     
     judge_model_list = [
-        "gemini-2.0-flash",
-        # "gpt-4o",
+        # "gemini-2.0-flash",
+        "gpt-4o",
         # "gpt-4.1",
     ]
     dataset_list = [
-        "AlpacaEval",
+        # "AlpacaEval",
         "ArenaHard",
-        "MTBench",
+        # "MTBench",
     ]
     response_model_list = [
         "gpt-4o-mini"
@@ -76,6 +76,7 @@ if __name__ == "__main__":
                 logger.info(f"Saved dataset to {save_path}")
 
                 # logging statistics: How many 9 scores
+                logger.info(f"How many 10 scores: {sum(1 for score in original_score_list if score >= 10)}")
                 logger.info(f"How many 9 scores: {sum(1 for score in original_score_list if score == 9)}")
                 logger.info(f"How many 8 scores: {sum(1 for score in original_score_list if score == 8)}")
                 logger.info(f"How many 7 scores: {sum(1 for score in original_score_list if score == 7)}")
