@@ -133,12 +133,12 @@ if __name__ == "__main__":
     parser.add_argument("--Budget", type=int, default=20)
     parser.add_argument("--pool_size", type=int, default=3)
     parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
-    parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
+    parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
+    parser.add_argument("--dataset_name", type=str, default="ArenaHard")
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
-    parser.add_argument("--test_mode", type=str, default="random", choices=["random", "online", "single"])
-    parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
-    parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--test_mode", type=str, default="single", choices=["random", "online", "single"])
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
     parser.add_argument("--eval_num", type=int, default=1000)
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
@@ -189,8 +189,8 @@ if __name__ == "__main__":
     if args.eval_num >= selected_idxs_len:
         eval_num = selected_idxs_len
     else:
-        selected_idxs = random.sample(selected_idxs, args.eval_num)
         eval_num = args.eval_num
+        selected_idxs = random.sample(selected_idxs, eval_num)
         logger.info(f"Randomly sample {eval_num} questions from {selected_idxs_len} questions")
     logger.info("-"*100)
 
@@ -327,4 +327,4 @@ if __name__ == "__main__":
     logger.info(f"Trajectories saved to {save_path}")
     logger.info("-"*100)
 
-    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {args.eval_num} eval num")
+    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {eval_num} eval num")

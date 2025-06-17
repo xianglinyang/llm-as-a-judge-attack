@@ -196,8 +196,8 @@ if __name__ == "__main__":
     if args.eval_num >= selected_idxs_len:
         eval_num = selected_idxs_len
     else:
-        selected_idxs = random.sample(selected_idxs, args.eval_num)
         eval_num = args.eval_num
+        selected_idxs = random.sample(selected_idxs, eval_num)
         logger.info(f"Randomly sample {eval_num} questions from {selected_idxs_len} questions")
     logger.info("-"*100)
 
@@ -336,4 +336,4 @@ if __name__ == "__main__":
     logger.info(f"Trajectories saved to {save_path}")
     logger.info("-"*100)
 
-    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {args.eval_num} eval num")
+    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {eval_num} eval num")
