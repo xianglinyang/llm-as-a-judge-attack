@@ -10,7 +10,7 @@ if __name__ == "__main__":
     data_dir = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
     setup_logging(task_name="show_statistics")
     
-    dataset_name = "ArenaHard"
+    dataset_name = "MTBench"
     response_model_name = "gpt-4o-mini"
     judge_model_name = "gemini-2.0-flash"
 
@@ -29,3 +29,11 @@ if __name__ == "__main__":
     logger.info(f"How many 2 scores: {sum(1 for item in dataset if item['original_score'] == 2)}")
     logger.info(f"How many 1 scores: {sum(1 for item in dataset if item['original_score'] == 1)}")
     logger.info(f"How many -1 scores: {sum(1 for item in dataset if item['original_score'] == -1)}")
+
+    # Example element
+    logger.info(f"Example element:")
+    logger.info(f"Question: {dataset[0]['instruction']}")
+    logger.info(f"Original Response: {dataset[0]['output']}")
+    logger.info(f"Original Score: {dataset[0]['original_score']}")
+    logger.info(f"Original Explanation: {dataset[0]['original_explanation']}")
+    logger.info(f"Category: {dataset[0]['category']}")
