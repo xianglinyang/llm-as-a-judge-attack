@@ -336,7 +336,7 @@ class ContextualBanditAgent(EvolveAgent):
 
             # 3. get new response
             strategy_list = [Bias_types[chosen_arm] for chosen_arm in chosen_arm_list]
-            new_response_list = self.batch_principle_guided_mutation(response_list, strategy_list)
+            new_response_list = self.bias_modificatior.batch_principle_guided_mutation(response_list, strategy_list)
             
             # 4. Get the score
             new_score_list, new_explanation_list = self.llm_evaluator.batch_pointwise_score(question_list, new_response_list)
