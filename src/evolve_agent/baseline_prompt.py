@@ -127,11 +127,11 @@ if __name__ == "__main__":
     parser.add_argument("--Budget", type=int, default=20)
     parser.add_argument("--pool_size", type=int, default=3)
     parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
-    parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
-    parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
-    parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
+    parser.add_argument("--dataset_name", type=str, default="ArenaHard")
+    parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=805)
+    parser.add_argument("--eval_num", type=int, default=1000)
     parser.add_argument("--save_analysis_path", type=str, default="results/")
     parser.add_argument("--save_trajectory_path", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/")
 
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     for idx in tqdm(range(len(dataset))):
         question, response, category, original_score, original_explanation = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category'], dataset[idx]['original_score'], dataset[idx]['original_explanation']
         
-        if original_score == 9:
+        if original_score >= 9:
             test_results.append({
                 "category": category,
                 "instruction": question,
@@ -177,8 +177,9 @@ if __name__ == "__main__":
     if args.eval_num >= dataset_len:
         eval_num = dataset_len
     else:
-        selected_idxs = random.sample(selected_idxs, args.eval_num)
-        logger.info(f"Randomly sample {args.eval_num} questions from {selected_idxs_len} questions")
+        eval_num = args.eval_num
+        selected_idxs = random.sample(selected_idxs, eval_num)
+        logger.info(f"Randomly sample {eval_num} questions from {selected_idxs_len} questions")
     logger.info("-"*100)
 
         
@@ -236,7 +237,7 @@ if __name__ == "__main__":
         "llm_agent_name": args.llm_agent_name,
         "budget": args.Budget,
         "pool_size": args.pool_size,
-        "eval_num": args.eval_num,
+        "eval_num": eval_num,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "time_taken": end_time - start_time,
     }
@@ -290,12 +291,11 @@ if __name__ == "__main__":
 
     # save the trajectories
     os.makedirs(args.save_trajectory_path, exist_ok=True)
-    timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+    timestamp = time.strftime("%Y-%m-%d_%H:%M:%S")
     save_path = os.path.join(args.save_trajectory_path, f"baseline_prompt_{timestamp}.json")
-    analysis["trajectory_path"] = save_path
     with open(save_path, "w") as f:
-        json.dump(analysis, f)
+        json.dump(trajectories, f)
     logger.info(f"Trajectories saved to {save_path}")
     logger.info("-"*100)
 
-    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {args.eval_num} eval num")
+    logger.info(f"Total time taken: {end_time - start_time:.2f} seconds for exploration with {args.Budget} budget and {args.pool_size} pool size and {eval_num} eval num")
