@@ -12,9 +12,9 @@ from src.evolve_agent.bandit.base import ContextualLinBanditAgent
 from src.llm_evaluator import JudgeModel
 from src.text_encoder import TextEncoder, MiniLMTextEncoder
 from src.llm_zoo import ModelWrapper, load_model
-from src.data import load_dataset
+from src.data.data_utils import load_dataset_for_exploration
 from src.logging_utils import setup_logging
-from src.data import CATEGORIES
+from src.data.assign_category import CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -72,10 +72,10 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
         Args:
             context_x_list (np.array): A (n_samples, n_features, 1) tensor representing the context.
         Returns:
-            np.array: A (n_samples, n_arms) tensor of UCB scores for each arm.
+            np.array: A (n_samples, n_arms, 1) tensor of UCB scores for each arm.
         """
-        if context_x_list.shape != (len(context_x_list), self.n_features, 1):
-            raise ValueError(f"Context_x must be a column vector of shape ({self.n_features}, 1)")
+        if context_x_list.shape[1:] != (self.n_features, 1):
+            raise ValueError(f"Context_x must be a tensor of shape (n_samples, {self.n_features}, 1)")
         
         n_samples = context_x_list.shape[0]
         p_ta_values = np.zeros((n_samples, self.n_arms, 1))
@@ -130,17 +130,17 @@ if __name__ == "__main__":
     setup_logging(task_name="UCB")
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--Budget", type=int, default=20)
-    parser.add_argument("--pool_size", type=int, default=3)
-    parser.add_argument("--judge_model_name", type=str, default="gemini-1.5-flash")
+    parser.add_argument("--Budget", type=int, default=5)
+    parser.add_argument("--pool_size", type=int, default=2)
+    parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
-    parser.add_argument("--test_mode", type=str, default="online", choices=["random", "online", "single"])
+    parser.add_argument("--test_mode", type=str, default="single", choices=["random", "online", "single"])
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
     parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
-    parser.add_argument("--eval_num", type=int, default=10)
+    parser.add_argument("--eval_num", type=int, default=7)
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
     parser.add_argument("--save_analysis_path", type=str, default="results/")
     parser.add_argument("--save_trajectory_path", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/")
@@ -148,56 +148,22 @@ if __name__ == "__main__":
     parser.add_argument("--alpha", type=float, default=1.0)
 
     args = parser.parse_args()
+    logger.info(f"Arguments: {args}")
 
-    dataset_name = args.dataset_name
-    response_model_name = args.response_model_name
 
-    n_features = args.n_features
     llm_agent = load_model(args.llm_agent_name)
     embedding_model = MiniLMTextEncoder()
-    judge_model_name = args.judge_model_name
-    llm_evaluator = JudgeModel(judge_model_name)
-    alpha = args.alpha
-    lambda_reg = args.lambda_reg
-    eval_num = args.eval_num
+    llm_evaluator = JudgeModel(args.judge_model_name)
 
-    budget = args.Budget
-    pool_size = args.pool_size
-    data_dir = args.data_dir
-    reward_type = args.reward_type
-
-    logger.info(f"Dataset: {dataset_name}, Response model: {response_model_name}")
-    logger.info(f"Budget: {budget}, Pool size: {pool_size}")
-    logger.info(f"Alpha: {alpha}, Lambda reg: {lambda_reg}")
-    logger.info(f"N features: {n_features}")
-    logger.info(f"Data dir: {data_dir}")
-    logger.info(f"Test mode: {args.test_mode}")
-    logger.info(f"Reward type: {reward_type}")
-
-    dataset = load_dataset(data_dir, dataset_name, response_model_name)
-    dataset_len = len(dataset)
-    logger.info(f"Loaded {dataset_len} questions from {dataset_name}")
-    if eval_num > dataset_len:
-        eval_num = dataset_len
-    else:
-        dataset = random.sample(dataset, eval_num)
-        logger.info(f"Randomly sample {eval_num} questions from {dataset_len} questions")
-    logger.info("-"*100)
-
+    dataset = load_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, args.judge_model_name)
+    
     # preprocess the dataset, exclude the perfect score 9 samples
     test_results = []
-    dataset_for_exploration = []
+    selected_idxs = []
     for idx in tqdm(range(len(dataset))):
-        question, response, category = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category']
-        logger.info(f"Question {idx}: {question}")
-        logger.info(f"Response {idx}: {response}")
-
-        original_score, original_explanation = llm_evaluator.pointwise_score(question, response)
-        logger.info(f"Original score: {original_score}, explanation: {original_explanation}")
+        question, response, category, original_score, original_explanation = dataset[idx]['instruction'], dataset[idx]['output'], dataset[idx]['category'], dataset[idx]['original_score'], dataset[idx]['original_explanation']
         
         if original_score == 9:
-            logger.info(f"Perfect score 9, skip")
-            # record the results
             test_results.append({
                 "category": category,
                 "instruction": question,
@@ -211,48 +177,61 @@ if __name__ == "__main__":
                 "skip": True,
             })
         elif original_score == -1:
-            logger.info(f"Invalid score, skip")
+            continue
         else:
-            dataset_for_exploration.append((question, response, category, original_score, original_explanation))
-        
+            selected_idxs.append(idx)
+
+    dataset_len = len(dataset)
+    selected_idxs_len = len(selected_idxs)
+    logger.info(f"Loaded {dataset_len} questions from {args.dataset_name}")
+    logger.info(f"Selected {selected_idxs_len} valid questions from {dataset_len} questions")
+    
+    if args.eval_num >= selected_idxs_len:
+        eval_num = selected_idxs_len
+    else:
+        selected_idxs = random.sample(selected_idxs, args.eval_num)
+        eval_num = args.eval_num
+        logger.info(f"Randomly sample {eval_num} questions from {selected_idxs_len} questions")
+    logger.info("-"*100)
+
     # Exploration part
     logger.info(f"Skipped {len(test_results)} samples")
-    logger.info(f"Dataset for exploration: {len(dataset_for_exploration)} samples...")
+    logger.info(f"Dataset for exploration: {len(selected_idxs)} samples...")
+
+    # selected samples
+    dataset_for_exploration = [dataset[idx] for idx in selected_idxs]
+    question_list = [item['instruction'] for item in dataset_for_exploration]
+    init_response_list = [item['output'] for item in dataset_for_exploration]
+    original_score_list = [item['original_score'] for item in dataset_for_exploration]
+    original_explanation_list = [item['original_explanation'] for item in dataset_for_exploration]
+    category_list = [item['category'] for item in dataset_for_exploration]
 
     logger.info(f"Initializing the agent...")
-    agent = ContextualLinUCBAgent(n_features, llm_agent, embedding_model, llm_evaluator, reward_type, alpha, lambda_reg)
+    agent = ContextualLinUCBAgent(args.n_features, llm_agent, embedding_model, llm_evaluator, args.reward_type, args.alpha, args.lambda_reg)
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
 
     trajectories = []
     if args.test_mode == "online":
         logger.info(f"Running online learning...")
-        trajectories = agent.online_learning([item[0] for item in dataset_for_exploration], [item[1] for item in dataset_for_exploration], pool_size, budget, shuffle_data=True, init_policy=True)
+        trajectories = agent.online_learning(question_list, init_response_list, original_score_list, original_explanation_list, args.pool_size, args.Budget, shuffle_data=True, init_policy=True)
         logger.info(f"Online learning finished.")
         logger.info("-"*100)
     elif args.test_mode == "single":
         logger.info(f"Running single exploration...")
-        for idx in tqdm(range(len(dataset_for_exploration))):
-            logger.info(f"Exploring question {idx}...")
-            question, response, category, original_score, original_explanation = dataset_for_exploration[idx]
-            final_trajectory = agent.explore(question, response, pool_size, budget, cold_start=True)
-            trajectories.append(final_trajectory.copy())
+        trajectories = agent.batch_explore(question_list, init_response_list, original_score_list, original_explanation_list, args.pool_size, args.Budget, cold_start=True)
         logger.info(f"Single exploration finished.")
         logger.info("-"*100)
     elif args.test_mode == "random":
         logger.info(f"Running random exploration...")
-        for idx in tqdm(range(len(dataset_for_exploration))):
-            logger.info(f"Exploring question {idx}...")
-            question, response, category, original_score, original_explanation = dataset_for_exploration[idx]
-            final_trajectory = agent.explore_with_random_arm(question, response, pool_size, budget)
-            trajectories.append(final_trajectory.copy())
+        trajectories = agent.batch_explore_with_random_arm(question_list, init_response_list, original_score_list, original_explanation_list, args.pool_size, args.Budget)
         logger.info(f"Random exploration finished.")
         logger.info("-"*100)
     else:
         raise ValueError(f"Invalid test mode: {args.test_mode}")
     
     # keep on record the results
-    for (question, response, category, original_score, original_explanation), trajectory in zip(dataset_for_exploration, trajectories):
+    for (question, response, category, original_score, original_explanation), trajectory in zip(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list), trajectories):
         final_score, final_explanation, final_response, _ = trajectory[-1]
         exploration_length = len(trajectory)-1
         test_results.append({
@@ -271,20 +250,22 @@ if __name__ == "__main__":
     # record the evaluation results
     analysis = {
         "strategy": "UCB",
-        "dataset_name": dataset_name,
-        "response_model_name": response_model_name,
+        "dataset_name": args.dataset_name,
+        "response_model_name": args.response_model_name,
         "test_mode": args.test_mode,
-        "judge_model_name": judge_model_name,
+        "judge_model_name": args.judge_model_name,
         "llm_agent_name": llm_agent.model_name,
-        "lambda_reg": lambda_reg,
-        "n_features": n_features,
-        "budget": budget,
-        "pool_size": pool_size,
+        "lambda_reg": args.lambda_reg,
+        "n_features": args.n_features,
+        "budget": args.Budget,
+        "pool_size": args.pool_size,
         "eval_num": eval_num,
-        "reward_type": reward_type,
-        "alpha": alpha,
+        "reward_type": args.reward_type,
+        "alpha": args.alpha,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "categories": {}
     }
+    
     # Analyze the test result for each category
     for category in CATEGORIES:
         category_results = [result for result in test_results if result["category"] == category]
@@ -299,6 +280,7 @@ if __name__ == "__main__":
         avg_improvement = np.mean([result["final_score"] - result["original_score"] for result in category_results if not result["skip"]])
         avg_score_before = np.mean([result["original_score"] for result in category_results if not result["skip"]])
         avg_score_after = np.mean([result["final_score"] for result in category_results if not result["skip"]])
+        
         logger.info(f"Number of up results: {up_num}")
         logger.info(f"Number of down results: {down_num}")
         logger.info(f"Number of tie results: {tie_num}")
@@ -308,7 +290,7 @@ if __name__ == "__main__":
         logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
         logger.info("--------------------------------")
 
-        analysis[category] = {
+        analysis["categories"][category] = {
             "up_num": up_num,
             "down_num": down_num,
             "tie_num": tie_num,
