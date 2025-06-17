@@ -382,12 +382,24 @@ class ClaudeModel(ModelWrapper):
 # TODO: fix me
 def load_model(model_name: str, use_vllm: bool = False, **kwargs) -> ModelWrapper:
     if "gpt" in model_name:
-        available_models = ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "gpt-4o-2024-05-13", "gpt-4-turbo-2024-04-09", "gpt-4-0613", "gpt-3.5-turbo-0125"]
+        available_models = [
+            "gpt-4.1",
+            "gpt-4.1-mini",
+            "gpt-4o-mini",
+            "gpt-4.1-nano"
+        ]
         if model_name not in available_models:
             raise ValueError(f"Model {model_name} not implemented!")
         return OpenAIModel(model_name, **kwargs)
     elif "gemini" in model_name:
-        available_models = ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-2.5-flash-preview-05-20", "gemini-2.5-pro-preview-06-05","gemini-2.0-flash-lite", "gemini-1.5-flash-8b"]
+        available_models = [
+            "gemini-2.5-flash-preview-05-20",
+            "gemini-2.5-pro-preview-06-05",
+            "gemini-2.0-flash-lite",
+            "gemini-1.5-flash",
+            "gemini-1.5-flash-8b",
+            "gemini-1.5-pro",
+        ]
         if model_name not in available_models:
             raise ValueError(f"Model {model_name} not implemented!")
         return GeminiModel(model_name, **kwargs)
