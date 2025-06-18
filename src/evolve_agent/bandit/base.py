@@ -384,21 +384,19 @@ class ContextualBanditAgent(EvolveAgent):
         return best_path_list
 
     
-    def online_learning(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, shuffle_data: bool = True, init_policy: bool = True):
-        # shuffle the question and init_response (Optional)
-        if shuffle_data:
-            logger.info(f"Shuffling the question and init_response")
-            question_list, init_response_list, original_score_list, original_explanation_list = shuffle(question_list, init_response_list, original_score_list, original_explanation_list)
-        
+    def online_learning(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, init_policy: bool = True, baseline_response_list: list[str] = None):
         if init_policy:
             logger.info(f"Initializing the policy model")
             self.init_policy_model()
         
+        if baseline_response_list is None:
+            baseline_response_list = init_response_list.copy()
+
         explore_trajectories = []
         # online learning
         logger.info(f"Online learning started")
-        for t, (question, init_response, original_score, original_explanation) in tqdm(enumerate(zip(question_list, init_response_list, original_score_list, original_explanation_list))):
-            explore_trajectory = self.explore(question, init_response, original_score, original_explanation, pool_size, Budget, cold_start=True if t==0 else False)
+        for t, (question, init_response, original_score, original_explanation, baseline_response) in tqdm(enumerate(zip(question_list, init_response_list, original_score_list, original_explanation_list, baseline_response_list))):
+            explore_trajectory = self.explore(question, init_response, original_score, original_explanation, pool_size, Budget, cold_start=True if t==0 else False, baseline_response=baseline_response)
             explore_trajectories.append(explore_trajectory)
             logger.info(f"Online learning iteration {t} finished")
             logger.info("-"*100)
@@ -408,8 +406,8 @@ class ContextualBanditAgent(EvolveAgent):
     
 
 class ContextualLinBanditAgent(ContextualBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", lambda_reg: float = 1.0):
-        super().__init__(n_features, llm_agent, embedding_model, llm_evaluator, reward_type)
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", lambda_reg: float = 1.0, judge_type: str = "pointwise"):
+        super().__init__(n_features, llm_agent, embedding_model, llm_evaluator, reward_type, judge_type)
         self.lambda_reg = lambda_reg
 
     def init_policy_model(self):
