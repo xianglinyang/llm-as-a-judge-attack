@@ -82,16 +82,15 @@ perspective.
 ## Model Outputs
 Here are the unordered outputs from the models. Each output is associated with a
 specific model, identified by a unique model identifier.
-{
-{
+{{
 "model identifier": "m",
 "output": "{output_1}"
-},
-{
+}},
+{{
 "model identifier": "M",
 "output": "{output_2}"
-}
-}
+}}
+
 ## Task
 Evaluate the models based on the quality and relevance of their outputs, and select
 the model that generated the best output. Answer by providing the model identifier of
