@@ -156,17 +156,17 @@ if __name__ == "__main__":
     setup_logging(task_name="ThompsonSampling") # Changed task name for logging
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--Budget", type=int, default=5)
-    parser.add_argument("--pool_size", type=int, default=2)
+    parser.add_argument("--Budget", type=int, default=20)
+    parser.add_argument("--pool_size", type=int, default=3)
     parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
-    parser.add_argument("--llm_agent_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
     parser.add_argument("--test_mode", type=str, default="single", choices=["random", "online", "single"])
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
-    parser.add_argument("--response_model_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data") # Adjusted default path
-    parser.add_argument("--eval_num", type=int, default=2) # Reduced default for quicker testing
+    parser.add_argument("--eval_num", type=int, default=1000) # Reduced default for quicker testing
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
     parser.add_argument("--save_analysis_path", type=str, default="results/")
     parser.add_argument("--save_trajectory_path", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/")
