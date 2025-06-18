@@ -66,9 +66,15 @@ class JudgeModel:
             better_model = json_response["better_model"]
             feedback = json_response["feedback"]
         except:
-            better_model = -1
+            better_model = None
             feedback = "Error: Failed to parse the response as a JSON object."
             print(f"Error: Failed to parse the response as a JSON object. {response}")
+        if better_model == "A":
+            better_model = 1
+        elif better_model == "B":
+            better_model = -1
+        else:
+            better_model = None
         return better_model, feedback
     
     def batch_pairwise_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
