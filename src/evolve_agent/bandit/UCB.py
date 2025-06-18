@@ -19,7 +19,7 @@ from src.data.assign_category import CATEGORIES
 logger = logging.getLogger(__name__)
 
 class ContextualLinUCBAgent(ContextualLinBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", alpha: float = 1.0, lambda_reg: float = 1.0):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", alpha: float = 1.0, lambda_reg: float = 1.0, judge_type: str = "pointwise"):
         """
         Initializes the LinUCB agent.
 
@@ -32,7 +32,7 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                                 This is the 'lambda' in (X^T X + lambda*I)^-1 X^T y.
                                 Corresponds to initializing A_a with lambda_reg * I.
         """
-        super().__init__(n_features, llm_agent, embedding_model, llm_evaluator, reward_type, lambda_reg)
+        super().__init__(n_features, llm_agent, embedding_model, llm_evaluator, reward_type, lambda_reg, judge_type)
         self.alpha = alpha
         self.init_policy_model()
 
@@ -133,6 +133,7 @@ if __name__ == "__main__":
     parser.add_argument("--Budget", type=int, default=20)
     parser.add_argument("--pool_size", type=int, default=3)
     parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
+    parser.add_argument("--judge_type", type=str, default="general", choices=["general", "mt_bench"])
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
     parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
     parser.add_argument("--dataset_name", type=str, default="ArenaHard")
@@ -207,7 +208,7 @@ if __name__ == "__main__":
     category_list = [item['category'] for item in dataset_for_exploration]
 
     logger.info(f"Initializing the agent...")
-    agent = ContextualLinUCBAgent(args.n_features, llm_agent, embedding_model, llm_evaluator, args.reward_type, args.alpha, args.lambda_reg)
+    agent = ContextualLinUCBAgent(args.n_features, llm_agent, embedding_model, llm_evaluator, args.reward_type, args.alpha, args.lambda_reg, judge_type="pointwise")
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
 
@@ -253,6 +254,8 @@ if __name__ == "__main__":
     # record the evaluation results
     analysis = {
         "strategy": "UCB",
+        "evaluation_type": "pointwise",
+        "judge_type": args.judge_type,
         "dataset_name": args.dataset_name,
         "response_model_name": args.response_model_name,
         "test_mode": args.test_mode,
