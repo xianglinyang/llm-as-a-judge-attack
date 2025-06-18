@@ -74,7 +74,7 @@ class JudgeModel:
         elif better_model == "B":
             better_model = -1
         else:
-            better_model = None
+            better_model = -2
         return better_model, feedback
     
     def batch_pairwise_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
@@ -91,7 +91,7 @@ class JudgeModel:
                 better_models.append(better_model)
                 feedbacks.append(feedback)
             except:
-                better_models.append(-1)
+                better_models.append(-2)
                 feedbacks.append("Error: Failed to parse the response as a JSON object.")
         return better_models, feedbacks
 
@@ -116,20 +116,20 @@ class AlpacaEvalModel(JudgeModel):
         elif response == "M":
             return -1, "The second response is better."
         else:
-            return None, "Error: Failed to parse the response as a JSON object."
+            return -2, "Error: Failed to parse the response as a JSON object."
     
     def batch_pairwise_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
-        formatted_prompts = [ALPACA_EVAL_PROMPT.format(instruction=input_q, output_a=response1, output_b=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
+        formatted_prompts = [ALPACA_EVAL_PROMPT.format(instruction=input_q, output_1=response1, output_2=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
         responses = asyncio.run(self.model.batch_invoke(formatted_prompts, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT))
         better_models = []
-        feedbacks = []
+        feedbacks = ["No explanation provided."] * len(q_list)
         for response in responses:
             if response == "m":
                 better_models.append(1)
             elif response == "M":
                 better_models.append(-1)
             else:
-                better_models.append(None)
+                better_models.append(-2)
         return better_models, feedbacks
     
 import re
@@ -148,7 +148,7 @@ def get_arena_hard_score(judge_output):
         if re.search(pattern, judge_output):
             return score
     
-    return None  # No valid verdict found
+    return -2  # No valid verdict found
 
 class ArenaHardAutoModel(JudgeModel):
     def __init__(self, model_name):
@@ -204,7 +204,7 @@ def get_mt_bench_score(judge_output):
         if re.search(pattern, judge_output):
             return int(score)
     
-    return None  # No valid verdict found
+    return -1  # No valid verdict found
 
 class MTBenchModel(JudgeModel):
     def __init__(self, model_name):
