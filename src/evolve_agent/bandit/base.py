@@ -16,11 +16,12 @@ from src.text_encoder import TextEncoder
 from src.llm_evaluator import JudgeModel
 from src.evolve_agent.utils import find_shortest_of_max_simple
 from src.evolve_agent.bias_strategies import Bias_types, BiasModification
+from src.evolve_agent.bandit.reward_cal import PointwiseRewardCalculator, PairwiseRewardCalculator
 
 logger = logging.getLogger(__name__)
 
 class ContextualBanditAgent(EvolveAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative"):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, llm_evaluator: JudgeModel, reward_type: str = "relative", judge_type: str = "pointwise"):
         """
         Initializes the Bandit Agent.
 
@@ -39,7 +40,9 @@ class ContextualBanditAgent(EvolveAgent):
         self.embedding_model = embedding_model
         self.llm_agent = llm_agent
         self.reward_type = reward_type
+        self.judge_type = judge_type
         self.bias_modificatior = BiasModification(llm_agent)
+        self.reward_fn = PointwiseRewardCalculator(llm_evaluator, reward_type) if judge_type == "pointwise" else PairwiseRewardCalculator(llm_evaluator, reward_type)
     
     @abstractmethod
     def init_policy_model(self):
@@ -108,27 +111,36 @@ class ContextualBanditAgent(EvolveAgent):
         # shape: (n_samples, n_features)
         return embeddings
     
-    def get_reward(self, question: str, response: str, original_score: float):
-        s, e = self.llm_evaluator.pointwise_score(question, response)
-        if self.reward_type == "relative":
-            reward = s-original_score
-        elif self.reward_type == "absolute":
-            reward = s
+    def get_reward(self, question: str, response: str, original_score: float, baseline_response: str = None):
+        if self.judge_type == "pointwise":
+            return self.reward_fn.calculate_reward(question, response, original_score)
+        elif self.judge_type == "pairwise":
+            return self.reward_fn.calculate_reward(question, response, original_score, baseline_response)
         else:
-            raise ValueError(f"Invalid reward type: {self.reward_type}")
-        return reward, s, e
+            raise ValueError(f"Invalid judge type: {self.judge_type}")
     
-    def get_batch_reward(self, question_list: list[str], response_list: list[str], original_score_list: list[float]):
-        s_list, e_list = self.llm_evaluator.batch_pointwise_score(question_list, response_list)
-        if self.reward_type == "relative":
-            reward_list = [s - original_score for s, original_score in zip(s_list, original_score_list)]
-        elif self.reward_type == "absolute":
-            reward_list = s_list
+    def get_batch_reward(self, question_list: list[str], response_list: list[str], original_score_list: list[float], baseline_response_list: list[str] = None):
+        if self.judge_type == "pointwise":
+            return self.reward_fn.calculate_batch_reward(question_list, response_list, original_score_list)
+        elif self.judge_type == "pairwise":
+            return self.reward_fn.calculate_batch_reward(question_list, response_list, original_score_list, baseline_response_list)
         else:
-            raise ValueError(f"Invalid reward type: {self.reward_type}")
-        return reward_list, s_list, e_list
+            raise ValueError(f"Invalid judge type: {self.judge_type}")
     
-    def explore(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int, cold_start: bool):
+    def explore(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int, cold_start: bool, baseline_response: str = None):
+        """
+        Explore responses using contextual bandit algorithm.
+        
+        Args:
+            question (str): The input question
+            init_response (str): Initial response to start with
+            original_score (float): Original score of the initial response
+            original_explanation (str): Explanation for the original score
+            pool_size (int): Maximum size of the response pool
+            Budget (int): Number of exploration steps
+            cold_start (bool): Whether to perform cold start exploration
+            baseline_response (str, optional): Pre-calculated baseline response for pairwise comparison
+        """
         if Budget<self.n_arms:
             raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
         # init the response pool
@@ -147,7 +159,8 @@ class ContextualBanditAgent(EvolveAgent):
 
                 new_response = self.bias_modificatior.principle_guided_mutation(init_response, strategy)
 
-                reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
+                # Use pre-calculated baseline response for pairwise evaluation
+                reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s, baseline_response)
                 self.update(arm_idx, context_x, reward)
 
                 pool.append([new_score, (original_score, original_explanation, init_response, None), (new_score, new_explanation, new_response, strategy)])
@@ -180,7 +193,8 @@ class ContextualBanditAgent(EvolveAgent):
             new_response = self.bias_modificatior.principle_guided_mutation(curr_r, strategy)
 
             # 4. Get the reward
-            reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s)
+            # Use pre-calculated baseline response for pairwise evaluation
+            reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s, baseline_response)
 
             # 5. Update the policy
             self.update(chosen_arm, context_x, reward)
@@ -193,16 +207,29 @@ class ContextualBanditAgent(EvolveAgent):
                 heapq.heappop(pool)
             
             # 6. log for evaluation
-            print(f"Iteration {t}:")
-            print(f"Original score: {curr_s}, explanation: {curr_e}")
-            print(f"New score: {new_score}, explanation: {new_explanation}")
-            print(f"Chosen arm: {self.strategy_list[chosen_arm]}")
-            print(f"New response: {new_response}\n")
+            logger.info(f"Iteration {t}:")
+            logger.info(f"Original score: {curr_s}, explanation: {curr_e}")
+            logger.info(f"New score: {new_score}, explanation: {new_explanation}")
+            logger.info(f"Chosen arm: {self.strategy_list[chosen_arm]}")
+            logger.info(f"New response: {new_response}\n")
 
         best_path = find_shortest_of_max_simple(pool)
         return best_path
     
-    def batch_explore(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, cold_start: bool):
+    def batch_explore(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, cold_start: bool, baseline_response_list: list[str] = None):
+        """
+        Batch explore responses using contextual bandit algorithm.
+        
+        Args:
+            question_list (list[str]): List of input questions
+            init_response_list (list[str]): List of initial responses
+            original_score_list (list[float]): List of original scores
+            original_explanation_list (list[str]): List of original explanations
+            pool_size (int): Maximum size of the response pool
+            Budget (int): Number of exploration steps
+            cold_start (bool): Whether to perform cold start exploration
+            baseline_response_list (list[str], optional): List of pre-calculated baseline responses for pairwise comparison
+        """
         if Budget<self.n_arms:
             raise ValueError(f"Budget must be greater than the number of arms: {self.n_arms}")
         
@@ -220,7 +247,7 @@ class ContextualBanditAgent(EvolveAgent):
             for arm_idx in range(self.n_arms):
                 strategy_list = [Bias_types[arm_idx]] * len(init_response_list)
                 new_responses = self.bias_modificatior.batch_principle_guided_mutation(init_response_list, strategy_list)
-                reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_responses, original_score_list)
+                reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_responses, original_score_list, baseline_response_list)
 
                 for i in range(len(init_response_list)):
                     self.update(arm_idx, context_x_list[i], reward_list[i])
@@ -253,7 +280,7 @@ class ContextualBanditAgent(EvolveAgent):
             new_response_list = self.bias_modificatior.batch_principle_guided_mutation(response_list, strategy_list)
             
             # 4. Get the reward
-            reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_response_list, original_score_list)
+            reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_response_list, original_score_list, baseline_response_list)
 
             # 5. Update the policy
             for i in range(len(response_list)):
