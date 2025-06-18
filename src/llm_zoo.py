@@ -55,7 +55,7 @@ class HuggingFaceModel(ModelWrapper):
             pretrained_model_name_or_path=self.model_name_or_path, torch_dtype=self.torch_dtype, device_map=self.device)
         logger.info("model loaded")
 
-    def invoke(self, prompt, system_prompt: str = None, max_new_tokens=2048, temperature=0.7, verbose=False):
+    def invoke(self, prompt, system_prompt: str = None, verbose=False):
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -70,7 +70,7 @@ class HuggingFaceModel(ModelWrapper):
         if verbose: logger.info("Tokenized inputs:\n", inputs)
         
         # 4: Generate text from the model
-        outputs = self.model.generate(**inputs, max_new_tokens=max_new_tokens, temperature=temperature, do_sample=True)
+        outputs = self.model.generate(**inputs, do_sample=True)
         if verbose: logger.info("Generated tokens:\n", outputs)
 
         # 5: Decode the output back to a string
@@ -79,10 +79,10 @@ class HuggingFaceModel(ModelWrapper):
         
         return decoded_output
     
-    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7, verbose=False):
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, verbose=False):
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature, verbose)
+            response = self.invoke(prompt, system_prompt, verbose)
             responses.append(response)
         return responses
 
@@ -114,12 +114,12 @@ class VLLMModel(ModelWrapper):
         time_end = time.time()
         logger.info(f"LLM initialization took {time_end - time_start:.2f} seconds.")
         
-    def invoke(self, prompt: str, n: int = 1, top_p: float = 0.95, temperature: float = 0.7, max_new_tokens: int = 2048) -> str:
+    def invoke(self, prompt: str, n: int = 1) -> str:
         sampling_params = SamplingParams(
             n=n,  # Number of output sequences to return for each prompt
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_new_tokens,  # Maximum number of tokens to generate per output. Adjust as needed.
+            # temperature=temperature,
+            # top_p=top_p,
+            # max_tokens=max_new_tokens,  # Maximum number of tokens to generate per output. Adjust as needed.
             # stop=["\n\n", "---"], # Sequences at which to stop generation.
         )
         logger.info(f"Using sampling parameters: {sampling_params}")
@@ -136,12 +136,11 @@ class VLLMModel(ModelWrapper):
         logger.info(f"Generation for {len(prompts_dataset)} prompts took {end_generation_time - start_generation_time:.2f} seconds.")
         return outputs[0].outputs[0].text.strip()
     
-    def batch_invoke(self, prompts: List[str], n: int = 1, top_p: float = 0.95, temperature: float = 0.7, max_new_tokens: int = 2048) -> str:
+    def batch_invoke(self, prompts: List[str], n: int = 1) -> str:
         sampling_params = SamplingParams(
             n=n,  # Number of output sequences to return for each prompt
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_new_tokens,  # Maximum number of tokens to generate per output. Adjust as needed.
+            # temperature=temperature,
+            # top_p=top_p,
             # stop=["\n\n", "---"], # Sequences at which to stop generation.
         )
         logger.info(f"Using sampling parameters: {sampling_params}")
@@ -188,7 +187,7 @@ class OpenAIModel(ModelWrapper):
         self.client = OpenAI()
         self.async_client = AsyncOpenAI()
     
-    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None) -> str:
         """Generates model output using OpenAI's API"""
         if system_prompt:
             messages = [
@@ -201,13 +200,11 @@ class OpenAIModel(ModelWrapper):
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
-            max_tokens=max_new_tokens,
             n=1,
-            temperature=temperature,
         )
         return response.choices[0].message.content.strip()
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
 
         async def get_completion(prompt_content: str):
             """
@@ -221,9 +218,7 @@ class OpenAIModel(ModelWrapper):
                 response = await self.async_client.chat.completions.create(
                     model=self.model_name,
                     messages=messages,
-                    max_tokens=max_new_tokens,
                     n=1,
-                    temperature=temperature,
                 )
                 return response.choices[0].message.content
             except Exception as e:
@@ -243,7 +238,7 @@ class DashScope(ModelWrapper):
         super().__init__(model_name)
         self.client = OpenAI(api_key=os.environ["DASHSCOPE_API_KEY"], base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
-    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None) -> str:
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -251,16 +246,14 @@ class DashScope(ModelWrapper):
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
-            max_tokens=max_new_tokens,
             n=1,
-            temperature=temperature,
         )
         return response.choices[0].message.content.strip()
     
-    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature)
+            response = self.invoke(prompt, system_prompt)
             responses.append(response)
         return responses
 
@@ -274,14 +267,12 @@ class GeminiModel(ModelWrapper):
         self.client = genai.Client()
 
 
-    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None) -> str:
         """Generates model output using the Gemini API."""
         response = self.client.models.generate_content(
             model=self.model_name,
             contents=prompt,
             config=types.GenerateContentConfig(
-                max_output_tokens=max_new_tokens,
-                temperature=temperature,
                 system_instruction=system_prompt,
                 # top_k= 2,
                 # top_p= 0.5,
@@ -292,7 +283,7 @@ class GeminiModel(ModelWrapper):
         )
         return response.text.strip()
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
 
         async def get_completion(prompt_content: str):
             """
@@ -303,8 +294,6 @@ class GeminiModel(ModelWrapper):
                     model=self.model_name,
                     contents=prompt_content,
                     config=types.GenerateContentConfig(
-                        max_output_tokens=max_new_tokens,
-                        temperature=temperature,
                         system_instruction=system_prompt,
                     )
                 )
@@ -327,7 +316,7 @@ class TogetherModel(ModelWrapper):
         super().__init__(model_name)
         self.client = Together(api_key=os.environ["TOGETHER_API_KEY"])
 
-    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None) -> str:
         """Generates model output using the TogetherAI API."""
         messages = []
         if system_prompt:
@@ -339,10 +328,10 @@ class TogetherModel(ModelWrapper):
             )
         return response.choices[0].message.content
     
-    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature)
+            response = self.invoke(prompt, system_prompt)
             responses.append(response)
         return responses
 
@@ -352,7 +341,7 @@ class ClaudeModel(ModelWrapper):
         super().__init__(model_name)
         self.client = Anthropic()
 
-    def invoke(self, prompt: str, system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None) -> str:
         """Generates model output using the Anthropic Messages API."""
         messages = []
         if system_prompt:
@@ -360,21 +349,14 @@ class ClaudeModel(ModelWrapper):
         messages.append({"role": "user", "content": prompt})
         output = self.client.messages.create(
             model=self.model_name,
-            max_tokens=max_new_tokens,
-            temperature=temperature,
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt
-                }
-            ]
+            messages=messages
         )
         return output.content[0].text.strip()
     
-    def batch_invoke(self, prompts: List[str], system_prompt: str = None, max_new_tokens=2048, temperature=0.7) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, system_prompt, max_new_tokens, temperature)
+            response = self.invoke(prompt, system_prompt)
             responses.append(response)
         return responses
 
