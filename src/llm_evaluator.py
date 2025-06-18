@@ -22,6 +22,7 @@ class JudgeModel:
             model_name (str): The name of the model to load from HF/API
         """
         self.model_name = model_name
+        self.judge_type = "general"
         self.model = load_model(model_name)
 
     def pointwise_score(self, input_q, response) -> tuple[int, str]:
@@ -92,7 +93,7 @@ class JudgeModel:
 class AlpacaEvalModel(JudgeModel):
     def __init__(self, model_name):
         super().__init__(model_name)
-        self.model_name = model_name
+        self.judge_type = "alpaca_eval"
         self.model = load_model(model_name)
     
     def pointwise_score(self, input_q, response) -> tuple[int, str]:
@@ -146,7 +147,7 @@ def get_arena_hard_score(judge_output):
 class ArenaHardAutoModel(JudgeModel):
     def __init__(self, model_name):
         super().__init__(model_name)
-        self.model_name = model_name
+        self.judge_type = "arena_hard_auto"
         self.model = load_model(model_name)
     
     def pairwise_score(self, input_q, response1, response2) -> tuple[int, str]:
@@ -202,7 +203,7 @@ def get_mt_bench_score(judge_output):
 class MTBenchModel(JudgeModel):
     def __init__(self, model_name):
         super().__init__(model_name)
-        self.model_name = model_name
+        self.judge_type = "mt_bench"
         self.model = load_model(model_name)
 
     def pairwise_score(self, input_q, response1, response2) -> tuple[int, str]:
@@ -225,11 +226,20 @@ class MTBenchModel(JudgeModel):
             outcome = get_mt_bench_score(response)
             scores.append(outcome)
         return scores, responses
-    
-    
-    
 
 
+def load_judge_model(judge_model_name, judge_model_backbone):
+    if judge_model_name == "general":
+        return JudgeModel(judge_model_backbone)
+    elif judge_model_name == "arena_hard_auto":
+        return ArenaHardAutoModel(judge_model_backbone)
+    elif judge_model_name == "mt_bench":
+        return MTBenchModel(judge_model_backbone)
+    elif judge_model_name == "alpaca_eval":
+        return AlpacaEvalModel(judge_model_backbone)
+    else:
+        raise ValueError(f"Invalid judge model name: {judge_model_name}")
+    
 
 if __name__ == "__main__":
 
