@@ -55,7 +55,7 @@ class PointwiseRewardCalculator(RewardCalculatorABC):
             
         return reward, s, e
     
-    def calculate_batch_reward(self, question_list: list[str], response_list: list[str], original_score_list: list[float], original_response_list: list[str] = None) -> tuple[list[float], list[float], list[str]]:
+    def calculate_batch_reward(self, question_list: list[str], response_list: list[str], original_score_list: list[float]) -> tuple[list[float], list[float], list[str]]:
         """
         Calculate rewards for a batch of responses.
         
@@ -63,7 +63,6 @@ class PointwiseRewardCalculator(RewardCalculatorABC):
             question_list (list[str]): List of input questions
             response_list (list[str]): List of current responses to evaluate
             original_score_list (list[float]): List of original scores
-            original_response_list (list[str], optional): List of original responses to compare against
             
         Returns:
             tuple[list[float], list[float], list[str]]: (reward_list, score_list, explanation_list)
@@ -108,7 +107,7 @@ class PairwiseRewardCalculator(RewardCalculatorABC):
             question_list (list[str]): List of input questions
             response_list (list[str]): List of current responses to evaluate
             original_score_list (list[float]): List of original scores
-            original_response_list (list[str], optional): List of original responses to compare against
+            baseline_response_list (list[str], optional): List of baseline responses to compare against
             
         Returns:
             tuple[list[float], list[float], list[str]]: (reward_list, score_list, explanation_list)
