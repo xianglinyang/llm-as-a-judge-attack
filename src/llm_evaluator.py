@@ -6,7 +6,7 @@ Point-wise scoring:
 """
 import asyncio
 
-from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT
+from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, POINTWISE_EVALUATION_PROMPT_WITH_RUBRICS, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, RUBRIC, EVALUATION_CRITERIA
 from src.llm_zoo import load_model
 from src.utils import str2json
 
@@ -39,6 +39,40 @@ class JudgeModel:
             print(f"Error: Failed to parse the response as a JSON object. {response}")
         return score, feedback
     
+    def pointwise_score_with_rubrics(self, input_q, response, rubrics=None, criteria=None) -> tuple[int, str]:
+        """Returns the model's confidence that the summary is its own output."""
+        if rubrics is None:
+            rubrics = RUBRIC
+        if criteria is None:
+            criteria = EVALUATION_CRITERIA
+        formatted_prompt = POINTWISE_EVALUATION_PROMPT_WITH_RUBRICS.format(INPUTS=input_q, OUTPUT=response, RUBRIC=rubrics, EVALUATION_CRITERIA=criteria)
+        response = self.model.invoke(formatted_prompt)
+        try:
+            json_response = str2json(response)
+            score = int(json_response["score"])
+            feedback = json_response["feedback"]
+            judgment = json_response["judgment"]
+        except:
+            score = -1
+            feedback = "Error: Failed to parse the response as a JSON object."
+            judgment = None
+            print(f"Error: Failed to parse the response as a JSON object. {response}")
+        return score, feedback, judgment
+    
+    def pointwise_score(self, input_q, response) -> tuple[int, str]:
+        """Returns the model's confidence that the summary is its own output."""
+        formatted_prompt = POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response)
+        response = self.model.invoke(formatted_prompt)
+        try:
+            json_response = str2json(response)
+            score = int(json_response["score"])
+            feedback = json_response["feedback"]
+        except:
+            score = -1
+            feedback = "Error: Failed to parse the response as a JSON object."
+            print(f"Error: Failed to parse the response as a JSON object. {response}")
+        return score, feedback
+    
     def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
@@ -56,6 +90,32 @@ class JudgeModel:
                 scores.append(-1)
                 explanations.append("Error: Failed to parse the response as a JSON object.")
         return scores, explanations
+    
+    def batch_pointwise_score_with_rubrics(self, q_list, response_list, rubrics=None, criteria=None) -> tuple[list[int], list[str], list[dict]]:
+        """Returns the model's confidence that the summary is its own output."""
+        if rubrics is None:
+            rubrics = RUBRIC
+        if criteria is None:
+            criteria = EVALUATION_CRITERIA
+        formatted_prompts = [POINTWISE_EVALUATION_PROMPT_WITH_RUBRICS.format(INPUTS=input_q, OUTPUT=response, RUBRIC=rubrics, EVALUATION_CRITERIA=criteria) for input_q, response in zip(q_list, response_list)]
+        responses = asyncio.run(self.model.batch_invoke(formatted_prompts))
+        scores = []
+        explanations = []
+        judgments = []
+        for response in responses:
+            try:
+                json_response = str2json(response)
+                score = int(json_response["score"])
+                explanation = json_response["feedback"]
+                judgment = json_response["judgment"]
+                scores.append(score)
+                explanations.append(explanation)
+                judgments.append(judgment)
+            except:
+                scores.append(-1)
+                explanations.append("Error: Failed to parse the response as a JSON object.")
+                judgments.append(None)
+        return scores, explanations, judgments
     
     def pairwise_score(self, input_q, response1, response2) -> tuple[int, str]:
         """Returns the model's confidence that the summary is its own output."""
@@ -107,6 +167,9 @@ class AlpacaEvalModel(JudgeModel):
     
     def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         raise NotImplementedError("AlpacaEvalModel does not support batch pointwise scoring.")
+    
+    def pointwise_score_with_rubrics(self, input_q, response, rubrics=None, criteria=None) -> tuple[int, str]:
+        raise NotImplementedError("AlpacaEvalModel does not support pointwise scoring with rubrics.")
     
     def pairwise_score(self, input_q, response1, response2) -> tuple[int, str]:
         formatted_prompt = ALPACA_EVAL_PROMPT.format(instruction=input_q, output_1=response1, output_2=response2)
@@ -181,6 +244,9 @@ class ArenaHardAutoModel(JudgeModel):
     def pointwise_score(self, input_q, response) -> tuple[int, str]:
         raise NotImplementedError("ArenaHardAutoModel does not support pointwise scoring.")
     
+    def pointwise_score_with_rubrics(self, input_q, response, rubrics=None, criteria=None) -> tuple[int, str]:
+        raise NotImplementedError("ArenaHardAutoModel does not support pointwise scoring with rubrics.")
+    
     def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         raise NotImplementedError("ArenaHardAutoModel does not support batch pointwise scoring.")
 
@@ -214,6 +280,9 @@ class MTBenchModel(JudgeModel):
 
     def pairwise_score(self, input_q, response1, response2) -> tuple[int, str]:
         raise NotImplementedError("MTBenchModel does not support pairwise scoring.")
+    
+    def pointwise_score_with_rubrics(self, input_q, response, rubrics=None, criteria=None) -> tuple[int, str]:
+        raise NotImplementedError("MTBenchModel does not support pointwise scoring with rubrics.")
     
     def batch_pairwise_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         raise NotImplementedError("MTBenchModel does not support batch pairwise scoring.")

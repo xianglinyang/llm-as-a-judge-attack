@@ -20,13 +20,87 @@ Below is the output of the task:
 3. Compare output to score descriptions: Compare the output against the criteria and score descriptions in the scoring rubric. For each criterion,decide which description best matches the output.
 4. After comparing the output to the score descriptions, pay attention to the small details that might impact the final score that you assign. Sometimes a small difference can dictate the final score.
 5. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
-6. Assign a final score based on the scoring rubric.
+6. Assign a final score from 1 to 9. 1 is the lowest score and 9 is the highest score.
 
 ## FORMAT FOR THE EVALUATION
 ```json
 {{
     "feedback": "Write the verbal explanation of the score here.",
     "score": "Give the numeric score from 1 to 9 here. 1 is the lowest score and 9 is the highest score."
+}}
+```
+
+Please accurately evaluate the task. Strictly adhere to the evaluation instructions.
+"""
+
+EVALUATION_CRITERIA = """\
+- Factuality: Whether the information provided in the response is accurate, based on reliable facts and data.
+- User Satisfaction: Whether the response meets the user's question and needs, and provides a comprehensive and appropriate answer to the question.
+- Logical Coherence: Whether the response maintains overall consistency and logical coherence between different sections, avoiding self-contradiction.
+- Richness: Whether the response includes rich info, depth, context, diversity, detailed explanations and examples to meet user needs and provide a comprehensive understanding.
+- Creativity: Whether the response is innovative or unique, providing novel insights or solutions.
+- Fairness and Responsibility: Whether the advice or information provided in the response is feasible, carries a certain degree of responsibility, and considers potential risks and consequences.
+- Completeness: Whether the response provides sufficient information and details to meet the user's needs, and whether it avoids omitting important aspects.
+- Clarity: Whether the response is clear and understandable, and whether it uses concise language and structure so that the user can easily understand it.
+- Others: Other aspects which are not listed above.
+"""
+
+RUBRIC = """\
+- Score 1: The response completely fails to address the customer's needs and ignores the specific issues raised.
+- Score 2: The response acknowledges the topic of the query but provides no actual help or a completely incorrect answer.
+- Score 3: The response attempts to address an issue but fundamentally misunderstands the core problem or misses the main point entirely.
+- Score 4: The response addresses the primary issue correctly but ignores other significant, explicitly mentioned issues.
+- Score 5: The response correctly addresses all specific issues raised, but in a robotic, unclear, or unhelpful tone.
+- Score 6: The response correctly addresses all specific issues in a clear and professional manner.
+- Score 7: The response correctly addresses all issues clearly and also demonstrates genuine empathy and personalization.
+- Score 8: The response addresses all issues with clarity and empathy, and proactively provides additional, relevant information or help to prevent future issues.
+- Score 9: The response fully and comprehensively addresses all aspects of the customer's query and all specific issues raised in a highly satisfactory manner.
+"""
+
+
+POINTWISE_EVALUATION_PROMPT_WITH_RUBRICS = """# GOAL
+Your job is to evaluate a task carried out by an AI system powered by a large language model.
+You will be provided with the inputs and output of the task, as well as the evaluation criteria and scoring rubric. Your task is to evaluate the output of the AI system based on the evaluation criteria and scoring rubric provided.
+
+# INPUT
+Below are the inputs required for performing the task:
+<inputs>
+{INPUTS}
+</inputs>
+
+# OUTPUT
+Below is the output of the task:
+<output>
+{OUTPUT}
+</output>
+
+# EVALUATION CRITERIA AND SCORING RUBRIC
+Here are the evaluation criteria and the rubric that you need to use for evaluating the task:
+<evaluation_criteria>
+{EVALUATION_CRITERIA}
+</evaluation_criteria>
+
+<scoring_rubric>
+{RUBRIC}
+</scoring_rubric>
+
+# INSTRUCTIONS FOR THE EVALUATION
+1. Understand the task and criteria: Familiarize yourself with the task to be evaluated. Review the evaluation criteria and scoring rubric to understand the different levels of performance and the descriptions for each score.
+2. Review the inputs and output: Look at the inputs provided for the task. Examine the output generated from completing the task.
+3. Compare output to score descriptions: Compare the output against the criteria and score descriptions in the scoring rubric. For each criterion,decide which description best matches the output.
+4. After comparing the output to the score descriptions, pay attention to the small details that might impact the final score that you assign. Sometimes a small difference can dictate the final score.
+5. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
+6. Assign a final score based on the scoring rubric and criteria.
+
+## FORMAT FOR THE EVALUATION
+```json
+{{
+    "feedback": "Write the verbal explanation of the score here.",
+    "score": "Give the numeric score here."
+    "judgment": {{
+        "Factuality": // list, all aspects that belong to this category.
+    ...
+    }}
 }}
 ```
 
