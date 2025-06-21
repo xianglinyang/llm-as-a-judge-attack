@@ -15,12 +15,10 @@ Below is the output of the task:
 </output>
 
 # INSTRUCTIONS FOR THE EVALUATION
-1. Understand the task and criteria: Familiarize yourself with the task to be evaluated. Review the evaluation criteria and scoring rubric to understand the different levels of performance and the descriptions for each score.
+1. Understand the task and criteria: Familiarize yourself with the task to be evaluated. 
 2. Review the inputs and output: Look at the inputs provided for the task. Examine the output generated from completing the task.
-3. Compare output to score descriptions: Compare the output against the criteria and score descriptions in the scoring rubric. For each criterion,decide which description best matches the output.
-4. After comparing the output to the score descriptions, pay attention to the small details that might impact the final score that you assign. Sometimes a small difference can dictate the final score.
-5. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
-6. Assign a final score from 1 to 9. 1 is the lowest score and 9 is the highest score.
+3. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
+4. Assign a final score from 1 to 9. 1 is the lowest score and 9 is the highest score.
 
 ## FORMAT FOR THE EVALUATION
 ```json
@@ -57,6 +55,17 @@ RUBRIC = """\
 - Score 9: The response fully and comprehensively addresses all aspects of the customer's query and all specific issues raised in a highly satisfactory manner.
 """
 
+STRICT_RUBRIC = """\
+- Score 1: The response completely fails to address the customer's needs and ignores the specific issues raised.
+- Score 2: Response makes a token attempt but provides demonstrably incorrect information on key issues OR fundamentally misunderstands the query leading to a harmful or useless suggestion.
+- Score 3: Response addresses some minor aspects correctly but fails to resolve the primary issue(s) OR provides a superficial answer that lacks necessary detail for resolution.
+- Score 4: Response addresses the primary issue with technically correct information, but demonstrably ignores or mishandles other explicitly stated secondary issues OR the provided solution is correct but so poorly explained it's likely to cause significant customer confusion.
+- Score 5: Response addresses all explicitly stated issues with technically correct information, but the response is difficult to understand, poorly structured, lacks crucial context for easy implementation by the customer, or contains minor factual inaccuracies on non-critical details.
+- Score 6: Response addresses all explicitly stated issues accurately and with sufficient clarity for a reasonably competent customer to understand and act upon without significant effort. The response is complete for the direct queries.
+- Score 7: Response flawlessly addresses all explicitly stated issues with exceptional accuracy and clarity, and the tone is professional and appropriate. There are no errors, ambiguities, or omissions concerning the direct questions.
+- Score 8: Response meets all criteria for Score 7 (flawless on explicit issues) AND demonstrates clear understanding of the customer's situation by providing targeted, relevant proactive advice or resources directly related to preventing recurrence or addressing closely related unstated needs.
+- Score 9: The response fully and comprehensively addresses all aspects of the customer's query (explicit and clearly implicit) and all specific issues raised in a highly satisfactory manner.
+"""
 
 POINTWISE_EVALUATION_PROMPT_WITH_RUBRICS = """# GOAL
 Your job is to evaluate a task carried out by an AI system powered by a large language model.
@@ -74,12 +83,7 @@ Below is the output of the task:
 {OUTPUT}
 </output>
 
-# EVALUATION CRITERIA AND SCORING RUBRIC
-Here are the evaluation criteria and the rubric that you need to use for evaluating the task:
-<evaluation_criteria>
-{EVALUATION_CRITERIA}
-</evaluation_criteria>
-
+# SCORING RUBRIC
 <scoring_rubric>
 {RUBRIC}
 </scoring_rubric>
@@ -90,17 +94,13 @@ Here are the evaluation criteria and the rubric that you need to use for evaluat
 3. Compare output to score descriptions: Compare the output against the criteria and score descriptions in the scoring rubric. For each criterion,decide which description best matches the output.
 4. After comparing the output to the score descriptions, pay attention to the small details that might impact the final score that you assign. Sometimes a small difference can dictate the final score.
 5. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
-6. Assign a final score based on the scoring rubric and criteria.
+6. Assign a final score based on the scoring rubric.
 
 ## FORMAT FOR THE EVALUATION
 ```json
 {{
     "feedback": "Write the verbal explanation of the score here.",
     "score": "Give the numeric score here."
-    "judgment": {{
-        "Factuality": // list, all aspects that belong to this category.
-    ...
-    }}
 }}
 ```
 
