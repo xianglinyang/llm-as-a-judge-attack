@@ -301,7 +301,7 @@ class ContextualBanditAgent(EvolveAgent):
             best_path_list.append(best_path.copy())
         return best_path_list
     
-    def explore_with_random_arm(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int):
+    def explore_with_random_arm(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int, baseline_response: str = None):
         # init the response pool
         pool = []
         pool.append([original_score, (original_score, original_explanation, init_response, None)])
@@ -319,8 +319,8 @@ class ContextualBanditAgent(EvolveAgent):
             strategy = Bias_types[chosen_arm]
             new_response = self.bias_modificatior.principle_guided_mutation(curr_r, strategy)
 
-            # 4. Get the reward
-            new_score, new_explanation = self.llm_evaluator.pointwise_score(question, new_response)
+            # 4. Get the reward using the reward calculator
+            reward, new_score, new_explanation = self.get_reward(question, new_response, curr_s, baseline_response)
 
             # 5.1 update the pool with heapq
             curr_path.append((new_score, new_explanation, new_response, strategy))
@@ -331,17 +331,17 @@ class ContextualBanditAgent(EvolveAgent):
                 heapq.heappop(pool)
             
             # 6. log for evaluation
-            print(f"Iteration {t}:")
-            print(f"Original score: {curr_s}, explanation: {curr_e}")
-            print(f"New score: {new_score}, explanation: {new_explanation}")
-            print(f"Chosen arm: {self.strategy_list[chosen_arm]}")
-            print(f"New response: {new_response}\n")
+            logger.info(f"Iteration {t}:")
+            logger.info(f"Original score: {curr_s}, explanation: {curr_e}")
+            logger.info(f"New score: {new_score}, explanation: {new_explanation}")
+            logger.info(f"Chosen arm: {self.strategy_list[chosen_arm]}")
+            logger.info(f"New response: {new_response}\n")
         
         # return the best response with shortest length
         best_path = find_shortest_of_max_simple(pool)
         return best_path
     
-    def batch_explore_with_random_arm(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int):
+    def batch_explore_with_random_arm(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, baseline_response_list: list[str] = None):
         pool_list = []
         for init_response, original_score, original_explanation in zip(init_response_list, original_score_list, original_explanation_list):
             pool = []
@@ -365,8 +365,8 @@ class ContextualBanditAgent(EvolveAgent):
             strategy_list = [Bias_types[chosen_arm] for chosen_arm in chosen_arm_list]
             new_response_list = self.bias_modificatior.batch_principle_guided_mutation(response_list, strategy_list)
             
-            # 4. Get the score
-            new_score_list, new_explanation_list = self.llm_evaluator.batch_pointwise_score(question_list, new_response_list)
+            # 4. Get the reward using the reward calculator
+            reward_list, new_score_list, new_explanation_list = self.get_batch_reward(question_list, new_response_list, original_score_list, baseline_response_list)
 
             # 5.1 update the pool with heapq
             for curr_path, new_s, new_e, new_r, new_strategy, pool in zip(sampled_path_list, new_score_list, new_explanation_list, new_response_list, strategy_list, pool_list):
