@@ -1,3 +1,16 @@
+from tqdm import tqdm
+import logging
+import numpy as np
+import os
+import json
+import time
+import random
+
+from src.data.data_utils import load_dataset_for_exploration
+from src.llm_evaluator import JudgeType, load_judge_model
+
+logger = logging.getLogger(__name__)
+
 def find_shortest_of_max_simple(data):
     if not data:
         return None
@@ -10,3 +23,240 @@ def find_shortest_of_max_simple(data):
     
     # 3. On this smaller list, find the item with the minimum length.
     return min(all_max_items, key=len)
+
+# TODO: consider the pairwise ordering
+def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_name, judge_type, judge_backbone, baseline_response_model_name=None):
+    '''
+    Prepare the dataset for exploration. Consider the judge type and judge backbone.
+    Args:
+        data_dir: the directory of the dataset
+        dataset_name: the name of the dataset
+        response_model_name: the name of the response model
+        judge_type: the type of the judge
+        judge_backbone: the backbone of the judge
+    Returns:
+        question_list: the list of questions
+        init_response_list: the list of initial responses
+        original_score_list: the list of original scores
+        original_explanation_list: the list of original explanations
+        category_list: the list of categories
+        baseline_response_list: the list of baseline responses
+    '''
+    dataset = load_dataset_for_exploration(data_dir, dataset_name, response_model_name, judge_backbone)
+
+    question_list = [item['instruction'] for item in dataset]
+    init_response_list = [item['output'] for item in dataset]
+    category_list = [item['category'] for item in dataset]
+
+    if judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH]:
+        original_score_list = [item['original_score'] for item in dataset]
+        original_explanation_list = [item['original_explanation'] for item in dataset]
+        baseline_response_list = init_response_list.copy()
+    elif judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        assert baseline_response_model_name is not None, "Baseline response model name is required for pairwise evaluation"
+        baseline_dataset = load_dataset_for_exploration(data_dir, dataset_name, baseline_response_model_name, judge_backbone)
+        baseline_response_list = [item['output'] for item in baseline_dataset]
+        assert len(question_list) == len(baseline_response_list), "Question list and baseline response list must have the same length"
+
+        # get pairwise score
+        judge_model = load_judge_model(judge_type, judge_backbone)
+        original_score_list, original_explanation_list = judge_model.batch_get_score(question_list, init_response_list, baseline_response_list)
+    else:
+        raise ValueError(f"Unsupported judge type: {judge_type}")
+
+    return question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list
+
+
+def exclude_perfect_response(judge_type, question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list):
+    # preprocess the dataset, exclude the perfect score
+    test_results = []
+    selected_idxs = []
+
+    for idx, (question, response, category, original_score, original_explanation) in enumerate(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list)):
+        if judge_type in [JudgeType.POINTWISE]:
+            if original_score >= 9:
+                test_results.append({
+                    "category": category,
+                    "instruction": question,
+                    "output": response,
+                    "original_score": original_score,
+                    "original_explanation": original_explanation,
+                    "final_score": original_score,
+                    "final_explanation": original_explanation,
+                    "final_response": response,
+                    "exploration_length": 1,
+                    "skip": True,
+                })
+                continue
+            elif original_score == -1:
+                continue
+            else:
+                selected_idxs.append(idx)
+        elif judge_type in [JudgeType.MT_BENCH]:
+            if original_score >= 5:
+                test_results.append({
+                    "category": category,
+                    "instruction": question,
+                    "output": response,
+                    "original_score": original_score,
+                    "original_explanation": original_explanation,
+                    "final_score": original_score,
+                    "final_explanation": original_explanation,
+                    "final_response": response,
+                    "exploration_length": 1,
+                    "skip": True,
+                })
+                continue
+            elif original_score == -1:
+                continue
+            else:
+                selected_idxs.append(idx)
+        elif judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+            # if win, skip
+            if original_score > 0:
+                test_results.append({
+                    "category": category,
+                    "instruction": question,
+                    "output": response,
+                    "baseline_response": baseline_response_list[idx] if baseline_response_list else None,
+                    "original_score": original_score,
+                    "original_explanation": original_explanation,
+                    "final_score": original_score,
+                    "final_response": response,
+                    "exploration_length": 1,
+                    "skip": True,
+                })
+            else:
+                selected_idxs.append(idx)
+        else:
+            raise ValueError(f"Unsupported judge type: {judge_type}")
+        
+    dataset_len = len(question_list)
+    selected_idxs_len = len(selected_idxs)
+    logger.info(f"Loaded {dataset_len} questions...")
+    logger.info(f"Selected {selected_idxs_len} valid questions...")
+
+    return test_results, selected_idxs
+
+def extract_result_from_trajectories(question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list, trajectories):
+    test_results = []
+    for i, (question, response, category, original_score, original_explanation, baseline_response, trajectory) in enumerate(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list, trajectories)):
+        # logger.info(f"Question: {question}")
+        # logger.info(f"Original response: {response}")
+        # logger.info(f"Original score: {original_score}")
+        # logger.info(f"Original explanation: {original_explanation}")
+        # logger.info(f"Trajectory: {trajectory}")
+        final_score, final_explanation, final_response, _ = trajectory[-1]
+        exploration_length = len(trajectory) -1
+        
+        result = {
+            "category": category,
+            "instruction": question,
+            "output": response,
+            "original_score": original_score,
+            "original_explanation": original_explanation,
+            "final_score": final_score,
+            "final_explanation": final_explanation,
+            "final_response": final_response,
+            "baseline_response": baseline_response,
+            "exploration_length": exploration_length,
+            "skip": False,
+        }
+        
+        test_results.append(result.copy())
+    return test_results
+
+def get_result_analysis(test_results):
+    # record the evaluation results
+    categories = set([result["category"] for result in test_results])
+    analysis = {}
+    analysis["categories"] = dict()
+    # Analyze the test result for each category
+    for category in categories:
+        category_results = [result for result in test_results if result["category"] == category]
+        logger.info(f"Category: {category}")
+        logger.info(f"Number of results: {len(category_results)}")
+
+        # Pointwise evaluation analysis
+        up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result["skip"]])
+        down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result["skip"]])
+        tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result["skip"]])
+        skip_num = len([result for result in category_results if result["skip"]])
+        avg_exploration_length = np.mean([result["exploration_length"] for result in category_results if not result["skip"]])
+        avg_score_before = np.mean([result["original_score"] for result in category_results if not result["skip"]])
+        avg_score_after = np.mean([result["final_score"] for result in category_results if not result["skip"]])
+        avg_improvement = np.mean([result["final_score"] - result["original_score"] for result in category_results if not result["skip"]])
+        
+        logger.info(f"Number of up results: {up_num}")
+        logger.info(f"Number of down results: {down_num}")
+        logger.info(f"Number of tie results: {tie_num}")
+        logger.info(f"Number of skip results: {skip_num}")
+        logger.info(f"Average exploration length: {avg_exploration_length}")
+        logger.info(f"Average improvement: {avg_improvement}")
+        logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
+        logger.info("--------------------------------")
+
+        analysis["categories"][category] = {
+            "up_num": up_num,
+            "down_num": down_num,
+            "tie_num": tie_num,
+            "skip_num": skip_num,
+            "exploration_length": avg_exploration_length,
+            "avg_score_before": avg_score_before,
+            "avg_score_after": avg_score_after,
+            "average_improvement": avg_improvement,
+        }
+    return analysis
+
+
+def save_result_analysis(analysis, save_path):
+    # save the analysis in the output
+    os.makedirs(save_path, exist_ok=True)
+    save_path = os.path.join(save_path, f"evaluation_results.json")
+    if os.path.exists(save_path):
+        history_analysis = json.load(open(save_path, "r"))
+        history_analysis.append(analysis)
+    else:
+        history_analysis = [analysis]
+        
+    with open(save_path, "w") as f:
+        json.dump(history_analysis, f)
+    logger.info(f"Analysis saved to {save_path}")
+    logger.info("-"*100)
+
+
+def save_trajectories(trajectories, save_path, save_name):
+    # save the trajectories
+    os.makedirs(save_path, exist_ok=True)
+    timestamp = time.strftime("%Y-%m-%d_%H:%M:%S")
+    save_path = os.path.join(save_path, f"{save_name}_{timestamp}.json")
+    with open(save_path, "w") as f:
+        json.dump(trajectories, f)
+    logger.info(f"Trajectories saved to {save_path}")
+    logger.info("-"*100)
+
+
+def sample_and_filter_data(selected_idxs, eval_num, question_list, init_response_list, 
+                              original_score_list, original_explanation_list, category_list, 
+                              baseline_response_list):
+    
+    selected_idxs_len = len(selected_idxs)
+    if eval_num >= selected_idxs_len:
+        eval_num = selected_idxs_len
+        logger.info(f"Eval num exceed the number of selected idxs, use all selected idxs.")
+        logger.info("Eval num: ", eval_num)
+        return eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list
+    else:
+        eval_num = eval_num
+        selected_idxs = random.sample(selected_idxs, eval_num)
+        logger.info(f"Randomly sample {eval_num} questions from {selected_idxs_len} questions")
+
+    # selected samples
+    question_list = [question_list[idx] for idx in selected_idxs]
+    init_response_list = [init_response_list[idx] for idx in selected_idxs]
+    original_score_list = [original_score_list[idx] for idx in selected_idxs]
+    original_explanation_list = [original_explanation_list[idx] for idx in selected_idxs]
+    category_list = [category_list[idx] for idx in selected_idxs]
+    baseline_response_list = [baseline_response_list[idx] for idx in selected_idxs]
+
+    return eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list
