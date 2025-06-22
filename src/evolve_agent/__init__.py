@@ -11,7 +11,8 @@ class EvolveAgent(ABC):
                  llm_agent: ModelWrapper,
                  judge_type: JudgeType,
                  judge_model_backbone: str,
-                 reward_type: Union[str, RewardType] = "relative"):
+                 reward_type: Union[str, RewardType] = "relative",
+                 answer_position: str = "first"):
         """
         Initialize the base evolve agent.
         
@@ -20,18 +21,21 @@ class EvolveAgent(ABC):
             judge_type (JudgeType): Type of judge for evaluation
             judge_model_backbone (str): Backbone model for the judge
             reward_type (Union[str, RewardType]): Type of reward calculation
+            answer_position (str): The position of the answer in the pairwise comparison
         """
         self.evolve_strategy = "ABCStrategy"
         self.llm_agent = llm_agent
         self.judge_type = judge_type
         self.judge_model_backbone = judge_model_backbone
         self.reward_type = reward_type
+        self.answer_position = answer_position
         
         # Create reward calculator based on judge type
         self.reward_calculator = create_reward_calculator(
             judge_type=judge_type,
             judge_model_backbone=judge_model_backbone,
-            reward_type=reward_type
+            reward_type=reward_type,
+            answer_position=answer_position
         )
     
     @abstractmethod

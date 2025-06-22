@@ -106,8 +106,17 @@ class PointwiseRewardCalculator(RewardCalculatorABC):
 
 
 class PairwiseRewardCalculator(RewardCalculatorABC):
-    def __init__(self, judge_type: JudgeType, judge_model_backbone: str, reward_type: Union[str, RewardType] = "absolute"):
+    def __init__(self, judge_type: JudgeType, judge_model_backbone: str, reward_type: Union[str, RewardType] = "absolute", answer_position: str = "first"):
+        '''
+
+        answer_position:
+            - first: the first response is the answer
+            - second: the second response is the answer
+        '''
         super().__init__(judge_type, judge_model_backbone, reward_type)
+        
+        assert answer_position in ["first", "second"], "Invalid answer position"
+        self.answer_position = answer_position
     
     def calculate_reward(self, 
                          question: str, 
@@ -132,7 +141,13 @@ class PairwiseRewardCalculator(RewardCalculatorABC):
                 - explanation: The explanation for the score
         """
         # Use pairwise comparison
-        raw_score, explanation = self.llm_evaluator.get_score(question, response, baseline_response)
+        if self.answer_position == "first":
+            raw_score, explanation = self.llm_evaluator.get_score(question, response, baseline_response)
+        elif self.answer_position == "second":
+            raw_score, explanation = self.llm_evaluator.get_score(question, baseline_response, response)
+            raw_score = - raw_score
+        else:
+            raise ValueError(f"Invalid answer position: {self.answer_position}")
         
         # Calculate reward based on reward type
         if self.reward_type == RewardType.RELATIVE:
@@ -168,11 +183,17 @@ class PairwiseRewardCalculator(RewardCalculatorABC):
         """
         if baseline_response_list is None:
             raise ValueError("baseline_response_list is required for pairwise evaluation")
-            
-        # Get pairwise scores for all responses
-        raw_scores, explanations = await self.llm_evaluator.batch_get_score(
-            question_list, response_list, baseline_response_list
-        )
+        
+        if self.answer_position == "first":
+            raw_scores, explanations = await self.llm_evaluator.batch_get_score(
+                question_list, response_list, baseline_response_list
+            )
+        elif self.answer_position == "second":
+            raw_scores, explanations = await self.llm_evaluator.batch_get_score(
+                question_list, baseline_response_list, response_list)
+            raw_scores = - raw_scores
+        else:
+            raise ValueError(f"Invalid answer position: {self.answer_position}")
 
         # Calculate rewards based on reward type
         if self.reward_type == RewardType.RELATIVE:
@@ -190,6 +211,7 @@ def create_reward_calculator(
         judge_type: JudgeType, 
         judge_model_backbone: str, 
         reward_type: Union[str, RewardType] = "relative",
+        answer_position: str = "first",
         **kwargs) -> RewardCalculatorABC:
     """
     Factory function to create the appropriate reward calculator based on judge type.
@@ -210,7 +232,7 @@ def create_reward_calculator(
     if judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH]:
         return PointwiseRewardCalculator(judge_type, judge_model_backbone, reward_type)
     elif judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
-        return PairwiseRewardCalculator(judge_type, judge_model_backbone, reward_type)
+        return PairwiseRewardCalculator(judge_type, judge_model_backbone, reward_type, answer_position)
     else:
         # Default to pairwise for unknown judge types
         logger.warning(f"Unknown judge_type '{judge_type}', defaulting to pointwise evaluation")
@@ -239,7 +261,8 @@ if __name__ == "__main__":
     judge_type = JudgeType.PAIRWISE
     judge_model_backbone = "gemini-2.0-flash"
     reward_type = RewardType.RELATIVE
-    reward_calculator = create_reward_calculator(judge_type, judge_model_backbone, reward_type)
+    answer_position = "second"
+    reward_calculator = create_reward_calculator(judge_type, judge_model_backbone, reward_type, answer_position)
 
     baseline_response = "ChatGPT: Sustainable urban design is a critical component of urban planning, aiming to create cities that are environmentally friendly, socially equitable, and economically viable. This approach considers the long-term impact of urban development on the natural environment, human well-being, and economic prosperity. Key principles include reducing carbon emissions, conserving water resources, promoting biodiversity, and ensuring access to green spaces. By integrating sustainable practices into urban design, cities can achieve a balance between economic growth and environmental sustainability, fostering a more resilient and livable urban environment."
     response = "Renewable energy technologies are poised to revolutionize urban landscapes, with advanced solar roadways potentially generating electricity while supporting vehicle traffic. Vertical wind turbines integrated into skyscrapers could become more efficient, potentially producing up to 30% of a building's energy needs. While some experts are skeptical about total urban energy independence, emerging technologies like transparent solar panels and bio-responsive energy systems suggest we're approaching a transformative period in sustainable urban design."

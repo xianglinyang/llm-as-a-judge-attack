@@ -21,7 +21,7 @@ from src.evolve_agent.bandit.reward_cal import create_reward_calculator
 logger = logging.getLogger(__name__)
 
 class ContextualBanditAgent(EvolveAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative"):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
         """
         Initializes the Bandit Agent.
 
@@ -33,7 +33,7 @@ class ContextualBanditAgent(EvolveAgent):
             judge_model_backbone (str): Backbone model for the judge
             reward_type (str): Type of reward to use ("relative" or "absolute").
         """
-        super().__init__(llm_agent, judge_type, judge_model_backbone, reward_type)
+        super().__init__(llm_agent, judge_type, judge_model_backbone, reward_type, answer_position)
         self.n_arms = len(Bias_types) # number of arms
         self.strategy_list = Bias_types
         self.n_features = n_features
@@ -41,7 +41,7 @@ class ContextualBanditAgent(EvolveAgent):
         self.bias_modificatior = BiasModification(llm_agent)
         
         # Initialize the reward calculator using the factory function
-        self.reward_calculator = create_reward_calculator(judge_type, judge_model_backbone, reward_type)
+        self.reward_calculator = create_reward_calculator(judge_type, judge_model_backbone, reward_type, answer_position)
     
     def validate_judge_requirements(self, baseline_response=None, baseline_response_list=None):
         """
@@ -462,8 +462,8 @@ class ContextualBanditAgent(EvolveAgent):
 
 
 class ContextualLinBanditAgent(ContextualBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", lambda_reg: float = 1.0):
-        super().__init__(n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, reward_type)
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", lambda_reg: float = 1.0, answer_position: str = "first"):
+        super().__init__(n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, reward_type, answer_position)
         self.lambda_reg = lambda_reg
 
     def init_policy_model(self):

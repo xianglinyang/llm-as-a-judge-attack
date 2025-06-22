@@ -14,7 +14,7 @@ from src.evolve_agent.utils import prepare_dataset_for_exploration, exclude_perf
 logger = logging.getLogger(__name__)
 
 class ContextualLinThompsonSamplingAgent(ContextualLinBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", v_ts: float = 1.0, lambda_reg: float = 1.0):
+    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", v_ts: float = 1.0, lambda_reg: float = 1.0, answer_position: str = "first"):
         """
         Initializes the Contextual Thompson Sampling agent.
 
@@ -31,8 +31,9 @@ class ContextualLinThompsonSamplingAgent(ContextualLinBanditAgent):
             lambda_reg (float): Regularization parameter for Ridge Regression.
                                 This is the 'lambda' in (X^T X + lambda*I)^-1 X^T y.
                                 Corresponds to initializing A_a with lambda_reg * I.
+            answer_position (str): Position of the answer in pairwise comparison ("first" or "second").
         """
-        super().__init__(n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, reward_type, lambda_reg)
+        super().__init__(n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, reward_type, lambda_reg, answer_position)
         self.v_ts = v_ts # Thompson Sampling parameter
         self.init_policy_model()
 
@@ -155,14 +156,14 @@ async def main(args):
     judge_model_backbone = args.judge_model_name
 
     # Use the enhanced reward system instead of manual pairwise scoring
-    question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = await prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, judge_model_backbone, args.baseline_response_model_name)
+    question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = await prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, judge_model_backbone, args.baseline_response_model_name, args.answer_position)
     test_results, selected_idxs = exclude_perfect_response(judge_type, question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list)
     logger.info(f"Skipped {len(test_results)} samples")
     logger.info(f"Dataset for exploration: {len(selected_idxs)} samples...")
     eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list = sample_and_filter_data(selected_idxs, args.eval_num, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list)
 
     logger.info(f"Initializing the agent...")
-    agent = ContextualLinThompsonSamplingAgent(args.n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, args.reward_type, args.v_ts, args.lambda_reg)
+    agent = ContextualLinThompsonSamplingAgent(args.n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, args.reward_type, args.v_ts, args.lambda_reg, args.answer_position)
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
 
@@ -191,6 +192,7 @@ async def main(args):
     meta_info = {
         "strategy": "Thompson Sampling",
         "judge_type": args.judge_type,
+        "answer_position": args.answer_position,
         "dataset_name": args.dataset_name,
         "judge_backbone": judge_model_backbone,
         "baseline_response_model_name": args.baseline_response_model_name,
@@ -225,6 +227,7 @@ if __name__ == "__main__":
     parser.add_argument("--pool_size", type=int, default=2)
     parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
     parser.add_argument("--judge_type", type=str, default="pairwise", choices=["pointwise", "pairwise", "alpaca_eval", "arena_hard_auto", "mt_bench"])
+    parser.add_argument("--answer_position", type=str, default="first", choices=["first", "second"], help="The position of the answer in the pairwise comparison")
     parser.add_argument("--baseline_response_model_name", type=str, default="gpt-4.1-mini")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
     parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")

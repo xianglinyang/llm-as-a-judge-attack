@@ -40,7 +40,7 @@ class DirectPromptingAgent(EvolveAgent):
     Evolve the response by modifying the style and tone of the response.
     Supports both pointwise and pairwise evaluation.
     '''
-    def __init__(self, llm_agent: ModelWrapper, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative"):
+    def __init__(self, llm_agent: ModelWrapper, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
         super().__init__(llm_agent, judge_type, judge_model_backbone, reward_type)
     
     def explore(self, question: str, init_response: str, original_score: float, original_explanation: str, budget: int = 5, pool_size: int = 2, baseline_response: str = None, **kwargs):
@@ -140,7 +140,7 @@ async def main(args):
     logger.info("-"*100)
     
 
-    question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = await prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, args.judge_backbone, args.baseline_response_model_name)
+    question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = await prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, args.judge_backbone, args.baseline_response_model_name, args.answer_position)
     test_results, selected_idxs = exclude_perfect_response(judge_type, question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list)
     logger.info(f"Skipped {len(test_results)} samples")
     logger.info(f"Dataset for exploration: {len(selected_idxs)} samples...")
@@ -168,6 +168,7 @@ async def main(args):
         "judge_type": args.judge_type,
         "dataset_name": args.dataset_name,
         "judge_backbone": args.judge_backbone,
+        "answer_position": args.answer_position,
         "baseline_response_model_name": args.baseline_response_model_name,
         "llm_agent_name": args.llm_agent_name,
         "response_model_name": args.response_model_name,
@@ -198,6 +199,7 @@ if __name__ == "__main__":
     parser.add_argument("--judge_backbone", type=str, default="gemini-2.0-flash")
     parser.add_argument("--judge_type", type=str, default="pointwise", 
                        choices=["pointwise", "pairwise", "alpaca_eval", "arena_hard_auto", "mt_bench"])
+    parser.add_argument("--answer_position", type=str, default="first", choices=["first", "second"], help="The position of the answer in the pairwise comparison")
     parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
     parser.add_argument("--baseline_response_model_name", type=str, default=None)
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
