@@ -140,7 +140,7 @@ async def main(args):
     logger.info("-"*100)
     
 
-    question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, args.judge_backbone, args.baseline_response_model_name)
+    question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = await prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, args.judge_backbone, args.baseline_response_model_name)
     test_results, selected_idxs = exclude_perfect_response(judge_type, question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list)
     logger.info(f"Skipped {len(test_results)} samples")
     logger.info(f"Dataset for exploration: {len(selected_idxs)} samples...")
