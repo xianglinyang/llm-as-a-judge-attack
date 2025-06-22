@@ -53,7 +53,7 @@ class PointwiseJudgeModel(JudgeModelABC):
             score = int(json_response["score"])
             feedback = json_response["feedback"]
         except:
-            score = -1
+            score = 0
             feedback = "Error: Failed to parse the response as a JSON object."
             print(f"Error: Failed to parse the response as a JSON object. {response}")
         return score, feedback
@@ -72,7 +72,7 @@ class PointwiseJudgeModel(JudgeModelABC):
                 scores.append(score)
                 explanations.append(explanation)
             except:
-                scores.append(-1)
+                scores.append(0)
                 explanations.append("Error: Failed to parse the response as a JSON object.")
         return scores, explanations
 
@@ -88,7 +88,7 @@ def get_pairwise_score(response):
     elif response == "B":
         return -1
     else:
-        return -2
+        return 0
 
 class PairwiseJudgeModel(JudgeModelABC):
     def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
@@ -178,7 +178,7 @@ def get_alpaca_eval_score(response):
     elif response == "M":
         return -1, "The second response is better."
     else:
-        return -2, "Error: Failed to parse the response as a JSON object."
+        return 0, "Error: Failed to parse the response as a JSON object."
 
 class AlpacaEvalModel(JudgeModelABC):
     def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
@@ -217,7 +217,7 @@ def get_arena_hard_score(judge_output):
         if re.search(pattern, judge_output):
             return score, judge_output
     
-    return -2, "Error: Failed to parse the response as a JSON object."
+    return 0, "Error: Failed to parse the response as a JSON object."
 
 class ArenaHardAutoModel(JudgeModelABC):
     def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
@@ -267,7 +267,7 @@ def get_mt_bench_score(judge_output):
         if re.search(pattern, judge_output):
             return int(score)
     
-    return -1  # No valid verdict found
+    return 0  # No valid verdict found
 
 class MTBenchModel(JudgeModelABC):
     def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
