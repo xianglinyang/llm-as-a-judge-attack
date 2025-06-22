@@ -15,7 +15,7 @@ import logging
 
 
 from src.logging_utils import setup_logging
-from src.llm_evaluator import JudgeModel
+from src.llm_evaluator import load_judge_model, JudgeType
 from src.data.data_utils import load_dataset
 from src.logging_utils import setup_logging
 
@@ -38,22 +38,25 @@ if __name__ == "__main__":
     ]
     dataset_list = [
         "AlpacaEval",
-        "ArenaHard",
-        "MTBench",
+        # "ArenaHard",
+        # "MTBench",
     ]
     response_model_list = [
         # "gpt-4o-mini"
-        "gpt-4.1-mini",
+        # "gpt-4.1-mini",
         # "gpt-4.1-nano",
         # "gemini-1.5-flash-8b",
+        "gpt-4o-2024-05-13"
     ]
+
+    judge_type = JudgeType.POINTWISE
 
     for dataset_name in dataset_list:
         for judge_model_name in judge_model_list:
             for response_model_name in response_model_list:
                 logger.info(f"Processing {dataset_name} with response model {response_model_name} and judge model {judge_model_name}")
 
-                llm_evaluator = JudgeModel(model_name=judge_model_name)
+                llm_evaluator = load_judge_model(judge_type, judge_model_name)
                 dataset = load_dataset(data_dir, dataset_name, response_model_name)
                 dataset_len = len(dataset)
                 logger.info(f"Loaded {dataset_len} questions from {dataset_name} with response model {response_model_name} and judge model {judge_model_name}")
@@ -61,7 +64,7 @@ if __name__ == "__main__":
                 # preprocess the dataset
                 question_list = [item['instruction'] for item in dataset]
                 response_list = [item['output'] for item in dataset]
-                original_score_list, original_explanation_list = llm_evaluator.batch_pointwise_score(question_list, response_list)
+                original_score_list, original_explanation_list = llm_evaluator.batch_get_score(question_list, response_list)
 
                 # construct the dataset for exploration
                 dataset_for_exploration = []
