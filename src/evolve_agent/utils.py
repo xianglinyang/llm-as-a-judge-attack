@@ -52,7 +52,7 @@ async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model
         original_score_list = [item['original_score'] for item in dataset]
         original_explanation_list = [item['original_explanation'] for item in dataset]
         baseline_response_list = init_response_list.copy()
-    elif judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+    elif judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
         assert baseline_response_model_name is not None, "Baseline response model name is required for pairwise evaluation"
         baseline_dataset = load_dataset_for_exploration(data_dir, dataset_name, baseline_response_model_name, judge_backbone)
         baseline_response_list = [item['output'] for item in baseline_dataset]
@@ -117,7 +117,7 @@ def exclude_perfect_response(judge_type, question_list, init_response_list, cate
                 continue
             else:
                 selected_idxs.append(idx)
-        elif judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        elif judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
             # if win, skip
             if original_score > 0:
                 test_results.append({

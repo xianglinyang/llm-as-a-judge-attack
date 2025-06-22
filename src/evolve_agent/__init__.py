@@ -130,7 +130,7 @@ class EvolveAgent(ABC):
                 response=response, 
                 original_score=original_score
             )
-        elif self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        elif self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO, JudgeType.PAIRWISE_FINE_GRAINED]:
             if baseline_response is None:
                 raise ValueError(f"baseline_response is required for {self.judge_type} evaluation")
             return self.reward_calculator.calculate_reward(
@@ -165,7 +165,7 @@ class EvolveAgent(ABC):
                 response_list=response_list,
                 original_score_list=original_score_list
             )
-        elif self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        elif self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO, JudgeType.PAIRWISE_FINE_GRAINED]:
             if baseline_response_list is None:
                 raise ValueError(f"baseline_response_list is required for {self.judge_type} evaluation")
             return await self.reward_calculator.calculate_batch_reward(
@@ -185,7 +185,7 @@ class EvolveAgent(ABC):
             baseline_response (Optional[str]): Baseline response for single evaluation
             baseline_response_list (Optional[List[str]]): Baseline responses for batch evaluation
         """
-        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO, JudgeType.PAIRWISE_FINE_GRAINED]:
             if baseline_response is None and baseline_response_list is None:
                 raise ValueError(f"baseline_response is required for {self.judge_type} evaluation")
             elif baseline_response_list is not None and None in baseline_response_list:

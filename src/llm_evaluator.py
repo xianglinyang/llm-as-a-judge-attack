@@ -8,7 +8,7 @@ from enum import Enum
 from abc import abstractmethod, ABC
 import re
 
-from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, POINTWISE_EVALUATION_PROMPT_WITH_RUBRICS, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, RUBRIC, EVALUATION_CRITERIA
+from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT
 from src.llm_zoo import load_model
 from src.utils import str2json
 
@@ -18,6 +18,7 @@ from src.utils import str2json
 class JudgeType(Enum):
     POINTWISE = "pointwise"
     PAIRWISE = "pairwise"
+    PAIRWISE_FINE_GRAINED = "pairwise_fine_grained"
     ALPACA_EVAL = "alpaca_eval"
     ARENA_HARD_AUTO = "arena_hard_auto"
     MT_BENCH = "mt_bench"
@@ -129,6 +130,48 @@ class PairwiseJudgeModel(JudgeModelABC):
                 feedbacks.append("Error: Failed to parse the response as a JSON object.")
         return better_models, feedbacks
 
+class FineGrainedPairwiseJudgeModel(JudgeModelABC):
+    def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
+        super().__init__(judge_type, judge_model_backbone)
+
+    def get_score(self, input_q, response1, response2) -> tuple[int, str]:
+        """Returns the model's confidence that the summary is its own output."""
+        formatted_prompt = PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2)
+        response = self.model.invoke(formatted_prompt)
+        try:
+            json_response = str2json(response)
+            better_model = json_response["better_model"]
+            feedback = json_response["feedback"]
+            score = int(json_response["score"])
+        except:
+            better_model = None
+            feedback = "Error: Failed to parse the response as a JSON object."
+            print(f"Error: Failed to parse the response as a JSON object. {response}")
+
+        score = get_pairwise_score(better_model)*score
+        return score, feedback
+        
+    
+    async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
+        """Returns the model's confidence that the summary is its own output."""
+        formatted_prompts = [PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
+        responses = await self.model.batch_invoke(formatted_prompts)
+        better_models = []
+        feedbacks = []
+        for response in responses:
+            try:
+                json_response = str2json(response)
+                better_model = json_response["better_model"]
+                feedback = json_response["feedback"]
+                score = int(json_response["score"])
+                fine_grained_score = get_pairwise_score(better_model)*score
+                better_models.append(fine_grained_score)
+                feedbacks.append(feedback)
+            except:
+                better_models.append(-2)
+                feedbacks.append("Error: Failed to parse the response as a JSON object.")
+        return better_models, feedbacks
+    
 def get_alpaca_eval_score(response):
     if response == "m":
         return 1, "The first response is better."
@@ -251,6 +294,8 @@ def load_judge_model(judge_type, judge_model_backbone):
         return PointwiseJudgeModel(judge_type, judge_model_backbone)
     elif judge_type == JudgeType.PAIRWISE:
         return PairwiseJudgeModel(judge_type, judge_model_backbone)
+    elif judge_type == JudgeType.PAIRWISE_FINE_GRAINED:
+        return FineGrainedPairwiseJudgeModel(judge_type, judge_model_backbone)
     elif judge_type == JudgeType.MT_BENCH:
         return MTBenchModel(judge_type, judge_model_backbone)
     elif judge_type == JudgeType.ALPACA_EVAL:

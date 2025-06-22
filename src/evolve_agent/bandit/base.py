@@ -6,14 +6,13 @@ import numpy as np
 import random
 import heapq
 import logging
-from tqdm import tqdm
 from abc import abstractmethod
-import asyncio
+
 
 from src.evolve_agent import EvolveAgent
 from src.llm_zoo import ModelWrapper
 from src.text_encoder import TextEncoder
-from src.llm_evaluator import JudgeType, load_judge_model
+from src.llm_evaluator import JudgeType
 from src.evolve_agent.utils import find_shortest_of_max_simple
 from src.evolve_agent.bias_strategies import Bias_types, BiasModification
 from src.evolve_agent.bandit.reward_cal import create_reward_calculator
@@ -51,7 +50,7 @@ class ContextualBanditAgent(EvolveAgent):
             baseline_response (str, optional): Baseline response for single evaluation
             baseline_response_list (list[str], optional): List of baseline responses for batch evaluation
         """
-        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
             if baseline_response is None and baseline_response_list is None:
                 raise ValueError(f"Baseline response is required for {self.judge_type} evaluation")
             if baseline_response_list is not None and None in baseline_response_list:
@@ -137,7 +136,7 @@ class ContextualBanditAgent(EvolveAgent):
         Returns:
             tuple[float, float, str]: (reward, score, explanation)
         """
-        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
             return self.reward_calculator.calculate_reward(question, response, original_score, baseline_response)
         else:
             return self.reward_calculator.calculate_reward(question, response, original_score)
@@ -155,7 +154,7 @@ class ContextualBanditAgent(EvolveAgent):
         Returns:
             tuple[list[float], list[float], list[str]]: (reward_list, score_list, explanation_list)
         """
-        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        if self.judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
             return await self.reward_calculator.calculate_batch_reward(question_list, response_list, original_score_list, baseline_response_list)
         else:
             return await self.reward_calculator.calculate_batch_reward(question_list, response_list, original_score_list)

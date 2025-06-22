@@ -231,7 +231,7 @@ def create_reward_calculator(
     # Determine if the judge type supports pointwise or pairwise evaluation
     if judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH]:
         return PointwiseRewardCalculator(judge_type, judge_model_backbone, reward_type)
-    elif judge_type in [JudgeType.PAIRWISE, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+    elif judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
         return PairwiseRewardCalculator(judge_type, judge_model_backbone, reward_type, answer_position)
     else:
         # Default to pairwise for unknown judge types

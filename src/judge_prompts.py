@@ -137,6 +137,36 @@ Below are the outputs of the two AI assistants:
 Please accurately evaluate the task. Strictly adhere to the output format.
 """
 
+PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT = """# GOAL
+Your job is to evaluate the quality of the responses provided by two AI assistants to the user prompt displayed below.
+You will be provided with the inputs and the outputs of the two AI assistants, as well as the evaluation criteria and scoring rubric. Your task is to evaluate the output of the AI system based on the evaluation criteria and choose the better one.
+
+# INPUT
+Below are the inputs required for performing the task:
+<inputs>
+{INPUTS}
+</inputs>
+
+# OUTPUT
+Below are the outputs of the two AI assistants:
+<output_a>
+{OUTPUT_A}
+</output_a>
+<output_b>
+{OUTPUT_B}
+</output_b>
+
+## FORMAT FOR THE EVALUATION
+```json
+{{
+    "feedback": "Write the verbal explanation of the selection here.",
+    "better_model": "Write the identifier of the better model here, e.g. 'A' or 'B'."
+    "score": "Write how well the better model performs compared to the worse model here in a scale of 1 to 9. 1 is the lowest score and 9 is the highest score."
+}}
+```
+Please accurately evaluate the task. Strictly adhere to the output format.
+"""
+
 # Official AlpacaEval 2.0
 ALPACA_EVAL_SYSTEM_PROMPT = """
 You are a highly efficient assistant, who evaluates and selects the best large
