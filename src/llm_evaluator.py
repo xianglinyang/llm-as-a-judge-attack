@@ -4,7 +4,6 @@ This class is used for llm-as-a-judge.
 Point-wise scoring:
 1. Absolute scoring, e.g. "Evaluate the harmlessness of this response on a scale of 1-9"
 """
-import asyncio
 from enum import Enum
 from abc import abstractmethod, ABC
 import re
@@ -37,7 +36,7 @@ class JudgeModelABC(ABC):
         pass
 
     @abstractmethod
-    def batch_get_score(self):
+    async def batch_get_score(self):
         pass
 
 class PointwiseJudgeModel(JudgeModelABC):
@@ -58,10 +57,10 @@ class PointwiseJudgeModel(JudgeModelABC):
             print(f"Error: Failed to parse the response as a JSON object. {response}")
         return score, feedback
     
-    def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
+    async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
-        responses = asyncio.run(self.model.batch_invoke(formatted_prompts))
+        responses = await self.model.batch_invoke(formatted_prompts)
         scores = []
         explanations = []
         for response in responses:
@@ -111,10 +110,10 @@ class PairwiseJudgeModel(JudgeModelABC):
         return score, feedback
         
     
-    def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
+    async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [PAIRWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = asyncio.run(self.model.batch_invoke(formatted_prompts))
+        responses = await self.model.batch_invoke(formatted_prompts)
         better_models = []
         feedbacks = []
         for response in responses:
@@ -149,9 +148,9 @@ class AlpacaEvalModel(JudgeModelABC):
         score, feedback = get_alpaca_eval_score(response)
         return score, feedback
 
-    def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
+    async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [ALPACA_EVAL_PROMPT.format(instruction=input_q, output_1=response1, output_2=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = asyncio.run(self.model.batch_invoke(formatted_prompts, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT))
+        responses = await self.model.batch_invoke(formatted_prompts, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT)
         scores = []
         feedbacks = []
         for response in responses:
@@ -194,9 +193,9 @@ class ArenaHardAutoModel(JudgeModelABC):
         score, feedback = get_arena_hard_score(response)
         return score, feedback
     
-    def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
+    async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [ARENA_HARD_AUTO_PROMPT.format(input_q, response1, response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = asyncio.run(self.model.batch_invoke(formatted_prompts))
+        responses = await self.model.batch_invoke(formatted_prompts)
         scores = []
         feedbacks = []
         for response in responses:
@@ -237,9 +236,9 @@ class MTBenchModel(JudgeModelABC):
         score = get_mt_bench_score(response)
         return score, response
     
-    def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
+    async def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [MT_BENCH_PROMPT.format(question=input_q, answer=response) for input_q, response in zip(q_list, response_list)]
-        responses = asyncio.run(self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_SYSTEM_PROMPT))
+        responses = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_SYSTEM_PROMPT)
         scores = []
         for response in responses:
             outcome = get_mt_bench_score(response)

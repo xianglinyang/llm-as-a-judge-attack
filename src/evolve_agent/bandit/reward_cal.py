@@ -3,11 +3,12 @@
 1. consider whether it is relative or absolute
 2. consider whether it is pointwise or pairwise
 '''
-from src.llm_evaluator import load_judge_model, JudgeType
 from abc import abstractmethod
 import logging
 from enum import Enum
 from typing import Union, List, Tuple, Optional
+
+from src.llm_evaluator import load_judge_model, JudgeType
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class RewardCalculatorABC:
         pass
 
     @abstractmethod
-    def calculate_batch_reward(self) -> Tuple[List[float], List[float], List[str]]:
+    async def calculate_batch_reward(self) -> Tuple[List[float], List[float], List[str]]:
         """Calculate rewards for a batch of responses"""
         pass
 
@@ -70,7 +71,7 @@ class PointwiseRewardCalculator(RewardCalculatorABC):
             
         return reward, score, explanation
     
-    def calculate_batch_reward(self, 
+    async def calculate_batch_reward(self, 
                                question_list: List[str], 
                                response_list: List[str], 
                                original_score_list: List[float], 
@@ -91,7 +92,7 @@ class PointwiseRewardCalculator(RewardCalculatorABC):
                 - explanation_list: List of explanations for the scores
         """
         # Get pointwise scores for all responses
-        score_list, explanation_list = self.llm_evaluator.batch_get_score(question_list, response_list)
+        score_list, explanation_list = await self.llm_evaluator.batch_get_score(question_list, response_list)
         
         # Calculate rewards based on reward type
         if self.reward_type == RewardType.RELATIVE:
@@ -143,7 +144,7 @@ class PairwiseRewardCalculator(RewardCalculatorABC):
             
         return reward, raw_score, explanation
     
-    def calculate_batch_reward(self, 
+    async def calculate_batch_reward(self, 
                                question_list: List[str], 
                                response_list: List[str], 
                                original_score_list: List[float], 
@@ -169,7 +170,7 @@ class PairwiseRewardCalculator(RewardCalculatorABC):
             raise ValueError("baseline_response_list is required for pairwise evaluation")
             
         # Get pairwise scores for all responses
-        raw_scores, explanations = self.llm_evaluator.batch_get_score(
+        raw_scores, explanations = await self.llm_evaluator.batch_get_score(
             question_list, response_list, baseline_response_list
         )
 
