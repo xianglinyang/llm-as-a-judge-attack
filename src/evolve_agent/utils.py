@@ -25,7 +25,7 @@ def find_shortest_of_max_simple(data):
     return min(all_max_items, key=len)
 
 # TODO: consider the pairwise ordering
-def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_name, judge_type, judge_backbone, baseline_response_model_name=None):
+async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_name, judge_type, judge_backbone, baseline_response_model_name=None):
     '''
     Prepare the dataset for exploration. Consider the judge type and judge backbone.
     Args:
@@ -60,7 +60,7 @@ def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_name,
 
         # get pairwise score
         judge_model = load_judge_model(judge_type, judge_backbone)
-        original_score_list, original_explanation_list = judge_model.batch_get_score(question_list, init_response_list, baseline_response_list)
+        original_score_list, original_explanation_list = await judge_model.batch_get_score(question_list, init_response_list, baseline_response_list)
     else:
         raise ValueError(f"Unsupported judge type: {judge_type}")
 
