@@ -350,12 +350,12 @@ class BiasModification:
         response = self.helper_model.invoke(strategy_prompt)
         return response
     
-    def batch_principle_guided_mutation(self, answer_list: list[str], strategy: list[str]) -> list[str]:
+    async def batch_principle_guided_mutation(self, answer_list: list[str], strategy: list[str]) -> list[str]:
         assert len(answer_list) == len(strategy), "The number of answers and strategies must be the same"
         strategy_prompt_list = [Bias_type_to_prompt[strategy] for strategy in strategy]
         strategy_prompt_instance_list = [strategy_prompt.format(original_answer=answer) for strategy_prompt, answer in zip(strategy_prompt_list, answer_list)]
 
-        responses = asyncio.run(self.helper_model.batch_invoke(strategy_prompt_instance_list))
+        responses = await self.helper_model.batch_invoke(strategy_prompt_instance_list)
         return responses
     
 
@@ -373,7 +373,7 @@ if __name__ == "__main__":
     logger.info(f"Modified Response: {response}")
     logger.info("--------------------------------")
 
-    response_list = bias_modification.batch_principle_guided_mutation([original_answer] * len(Bias_types), Bias_types)
+    response_list = asyncio.run(bias_modification.batch_principle_guided_mutation([original_answer] * len(Bias_types), Bias_types))
     for response, strategy in zip(response_list, Bias_types):
         logger.info(f"Strategy: {strategy}")
         logger.info(f"Modified Response: {response}")
