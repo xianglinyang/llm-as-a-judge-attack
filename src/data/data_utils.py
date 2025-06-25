@@ -49,18 +49,14 @@ def load_dataset(save_dir, dataset_name, response_model_name):
     metadata = load_metadata(save_dir, dataset_name)
     data = load_response(save_dir, dataset_name, response_model_name)
     
-    # merge the metadata and data based on instruction field
-    # TODO: optimize the merge process with dict structure
     new_dataset = []
-    for item in metadata:
-        for data_item in data:
-            if item["instruction"] == data_item["instruction"]:
-                new_item = item.copy()
-                new_item.update(data_item)
-                new_dataset.append(new_item)
-                break
-        else:
-            new_dataset.append(item)
+    metadata_dict = {item["instruction"]: item for item in metadata}
+
+    for data_item in data:
+        item = metadata_dict[data_item["instruction"]].copy()
+        item.update(data_item)
+        new_dataset.append(item)
+    
     return new_dataset
 
 def load_dataset_for_exploration(save_dir, dataset_name, response_model_name, judge_model_name):

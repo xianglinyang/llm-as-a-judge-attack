@@ -8,7 +8,7 @@ from enum import Enum
 from abc import abstractmethod, ABC
 import re
 
-from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT
+from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT, PAPER_OVERALL_RUBRIC
 from src.llm_zoo import load_model
 from src.utils import str2json
 
@@ -288,6 +288,65 @@ class MTBenchModel(JudgeModelABC):
             scores.append(outcome)
         return scores, responses
 
+def get_mlrbench_score(judge_output):
+#     ```json
+# {{
+#     "Clarity": {{
+#         "score": <1-10>,
+#         "justification": "<Your justification here>"
+#     }},
+#     "Novelty": {{
+#         "score": <1-10>,
+#         "justification": "<Your justification here>"
+#     }},
+#     "Soundness": {{
+#         "score": <1-10>,
+#         "justification": "<Your justification here>"
+#     }},
+#     "Significance": {{
+#         "score": <1-10>,
+#         "justification": "<Your justification here>"
+#     }},
+#     "Overall": {{
+#         "score": <1-10>,
+#         "strengths": ["<strength 1>", "<strength 2>"],
+#         "weaknesses": ["<weakness 1>", "<weakness 2>"]
+#     }},
+#     "Confidence": <1-5>
+# }}
+# ```
+    try:
+        json_response = str2json(judge_output)
+        score = int(json_response["Overall"]["score"])
+        strengths = json_response["Overall"]["strengths"]
+        weaknesses = json_response["Overall"]["weaknesses"]
+        explanation = f"Strengths: {strengths}, Weaknesses: {weaknesses}"
+        return score, explanation
+    except:
+        return 0, "Error: Failed to parse the response as a JSON object."
+
+
+class MLRBenchModel(JudgeModelABC):
+    """Pointwise judge for MLRBench"""
+    def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
+        super().__init__(judge_type, judge_model_backbone)
+
+    def get_score(self, input_q, response) -> tuple[int, str]:
+        formatted_prompt = PAPER_OVERALL_RUBRIC.format(task=input_q, paper=response)
+        response = self.model.invoke(formatted_prompt)
+        score, explanation = get_mlrbench_score(response)
+        return score, explanation
+    
+    async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
+        formatted_prompts = [PAPER_OVERALL_RUBRIC.format(task=input_q, paper=response) for input_q, response in zip(q_list, response_list)]
+        responses = await self.model.batch_invoke(formatted_prompts)
+        scores = []
+        explanations = []
+        for response in responses:
+            score, explanation = get_mlrbench_score(response)
+            scores.append(score)
+            explanations.append(explanation)
+        return scores, explanations
 
 def load_judge_model(judge_type, judge_model_backbone):
     if judge_type == JudgeType.POINTWISE:
