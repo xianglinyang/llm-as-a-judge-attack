@@ -159,7 +159,7 @@ class EvolveAgent(ABC):
         Returns:
             tuple[List[float], List[float], List[str]]: (reward_list, score_list, explanation_list)
         """
-        if self.judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH]:
+        if self.judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH, JudgeType.MLR_BENCH]:
             return await self.reward_calculator.calculate_batch_reward(
                 question_list=question_list,
                 response_list=response_list,
