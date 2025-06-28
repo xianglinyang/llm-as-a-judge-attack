@@ -22,6 +22,7 @@ class JudgeType(Enum):
     ALPACA_EVAL = "alpaca_eval"
     ARENA_HARD_AUTO = "arena_hard_auto"
     MT_BENCH = "mt_bench"
+    MLR_BENCH = "mlr_bench"
 
 # ------------------------------------------------------------
 # Judge Model
@@ -361,6 +362,8 @@ def load_judge_model(judge_type, judge_model_backbone):
         return AlpacaEvalModel(judge_type, judge_model_backbone)
     elif judge_type == JudgeType.ARENA_HARD_AUTO:
         return ArenaHardAutoModel(judge_type, judge_model_backbone)
+    elif judge_type == JudgeType.MLR_BENCH:
+        return MLRBenchModel(judge_type, judge_model_backbone)
     else:
         raise ValueError(f"Invalid judge type: {judge_type}")
     

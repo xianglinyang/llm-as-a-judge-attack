@@ -48,7 +48,7 @@ async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model
     init_response_list = [item['output'] for item in dataset]
     category_list = [item['category'] for item in dataset]
 
-    if judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH]:
+    if judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH, JudgeType.MLR_BENCH]:
         original_score_list = [item['original_score'] for item in dataset]
         original_explanation_list = [item['original_explanation'] for item in dataset]
         baseline_response_list = init_response_list.copy()
@@ -79,7 +79,7 @@ def exclude_perfect_response(judge_type, question_list, init_response_list, cate
     selected_idxs = []
 
     for idx, (question, response, category, original_score, original_explanation) in enumerate(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list)):
-        if judge_type in [JudgeType.POINTWISE]:
+        if judge_type in [JudgeType.POINTWISE, JudgeType.MLR_BENCH]:
             if original_score >= 9:
                 test_results.append({
                     "category": category,

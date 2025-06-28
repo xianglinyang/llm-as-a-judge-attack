@@ -32,24 +32,27 @@ async def main():
     setup_logging(task_name="preprocess_dataset_for_exploration")
     
     judge_model_list = [
-        "gemini-2.0-flash",
+        # "gemini-2.0-flash",
         # "gpt-4o",
         # "gpt-4.1",
+        "o4-mini"
     ]
     dataset_list = [
-        "AlpacaEval",
+        # "AlpacaEval",
         # "ArenaHard",
         # "MTBench",
+        "MLRBench"
     ]
     response_model_list = [
-        "gpt-4o-mini"
+        # "gpt-4o-mini"
         # "gpt-4.1-mini",
         # "gpt-4.1-nano",
         # "gemini-1.5-flash-8b",
-        # "gpt-4o-2024-05-13"
+        # "gpt-4o-2024-05-13",
+        "claude-3-7-sonnet-20250219"
     ]
 
-    judge_type = JudgeType.POINTWISE
+    judge_type = JudgeType.MLR_BENCH
 
     for dataset_name in dataset_list:
         for judge_model_name in judge_model_list:
