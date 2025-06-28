@@ -250,7 +250,7 @@ def sample_and_filter_data(selected_idxs, eval_num, question_list, init_response
     if eval_num >= selected_idxs_len:
         eval_num = selected_idxs_len
         logger.info(f"Eval num exceed the number of selected idxs, use all selected idxs.")
-        logger.info("Eval num: ", eval_num)
+        logger.info(f"Eval num: {eval_num}")
         return eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list
     else:
         eval_num = eval_num
