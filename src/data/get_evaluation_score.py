@@ -10,8 +10,8 @@ Dataset for evaluation:
 '''
 import json
 import os
-import asyncio
 import logging
+import asyncio
 
 
 from src.logging_utils import setup_logging
@@ -22,9 +22,9 @@ from src.logging_utils import setup_logging
 logger = logging.getLogger(__name__)
 
 
-if __name__ == "__main__":
+async def main():
 
-    data_dir = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
+    data_dir = "/data2/xianglin/llm-as-a-judge-attack/data"
     
     # ------------------------------------------------------------
     # get score from judge model
@@ -42,11 +42,11 @@ if __name__ == "__main__":
         # "MTBench",
     ]
     response_model_list = [
-        # "gpt-4o-mini"
+        "gpt-4o-mini"
         # "gpt-4.1-mini",
         # "gpt-4.1-nano",
         # "gemini-1.5-flash-8b",
-        "gpt-4o-2024-05-13"
+        # "gpt-4o-2024-05-13"
     ]
 
     judge_type = JudgeType.POINTWISE
@@ -64,7 +64,7 @@ if __name__ == "__main__":
                 # preprocess the dataset
                 question_list = [item['instruction'] for item in dataset]
                 response_list = [item['output'] for item in dataset]
-                original_score_list, original_explanation_list = llm_evaluator.batch_get_score(question_list, response_list)
+                original_score_list, original_explanation_list = await llm_evaluator.batch_get_score(question_list, response_list)
 
                 # construct the dataset for exploration
                 dataset_for_exploration = []
@@ -100,3 +100,5 @@ if __name__ == "__main__":
                     json.dump(dataset_for_exploration, f, indent=4)
                 logger.info(f"Saved dataset to {save_path}")
                 
+if __name__ == "__main__":
+    asyncio.run(main())
