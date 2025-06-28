@@ -1,4 +1,3 @@
-
 from abc import ABC, abstractmethod
 
 import torch
@@ -67,15 +66,15 @@ class HuggingFaceModel(ModelWrapper):
         inputs = self.tokenizer(prompt, return_tensors="pt", add_special_tokens=False)
         # Move the tokenized inputs to the same device the model is on (GPU/CPU)
         inputs = {key: tensor.to(self.model.device) for key, tensor in inputs.items()}
-        if verbose: logger.info("Tokenized inputs:\n", inputs)
+        if verbose: logger.info(f"Tokenized inputs:\n{inputs}")
         
         # 4: Generate text from the model
         outputs = self.model.generate(**inputs, do_sample=True)
-        if verbose: logger.info("Generated tokens:\n", outputs)
+        if verbose: logger.info(f"Generated tokens:\n{outputs}")
 
         # 5: Decode the output back to a string
         decoded_output = self.tokenizer.decode(outputs[0][inputs['input_ids'].size(1):], skip_special_tokens=True)
-        if verbose: logger.info("Decoded output:\n", decoded_output)
+        if verbose: logger.info(f"Decoded output:\n{decoded_output}")
         
         return decoded_output
     
