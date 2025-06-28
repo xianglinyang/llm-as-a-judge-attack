@@ -362,18 +362,15 @@ class ClaudeModel(ModelWrapper):
 
 # TODO: fix me
 def load_model(model_name: str, use_vllm: bool = False, **kwargs) -> ModelWrapper:
-    if "gpt" in model_name:
-        available_models = [
-            "gpt-4.1",
-            "gpt-4.1-mini",
-            "gpt-4o-mini",
-            "gpt-4.1-nano"
-        ]
-        if model_name not in available_models:
-            raise ValueError(f"Model {model_name} not implemented!")
+    if model_name in [
+        "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4o-mini",
+        "gpt-4.1-nano",
+        "o4-mini", # o4-mini-2025-04-16
+    ]:
         return OpenAIModel(model_name, **kwargs)
-    elif "gemini" in model_name:
-        available_models = [
+    elif model_name in [
             "gemini-2.5-pro",
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite-preview-06-17",
@@ -384,10 +381,12 @@ def load_model(model_name: str, use_vllm: bool = False, **kwargs) -> ModelWrappe
             "gemini-1.5-flash",
             "gemini-1.5-flash-8b",
             "gemini-1.5-pro",
-        ]
-        if model_name not in available_models:
-            raise ValueError(f"Model {model_name} not implemented!")
+    ]:
         return GeminiModel(model_name, **kwargs)
+    elif model_name in [
+        "claude-3-7-sonnet-20250219",
+    ]:
+        return ClaudeModel(model_name, **kwargs)
     elif "/" in model_name:
         if use_vllm:
             return VLLMModel(model_name, **kwargs)
