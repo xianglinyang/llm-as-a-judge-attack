@@ -205,7 +205,7 @@ if __name__ == "__main__":
     parser.add_argument("--judge_model_name", type=str, default="gemini-2.0-flash")
     parser.add_argument("--judge_type", type=str, default="pointwise", choices=["pointwise", "pairwise", "pairwise_fine_grained", "alpaca_eval", "arena_hard_auto", "mt_bench", "mlr_bench"])
     parser.add_argument("--answer_position", type=str, default="first", choices=["first", "second"], help="The position of the answer in the pairwise comparison")
-    parser.add_argument("--baseline_response_model_name", type=str, default="gpt-4.1-mini")
+    parser.add_argument("--baseline_response_model_name", type=str, default=None, help="The model name of the baseline response model")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
     parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
