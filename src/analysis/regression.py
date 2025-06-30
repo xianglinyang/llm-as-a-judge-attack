@@ -14,6 +14,9 @@ import numpy as np
 
 import statsmodels.api as sm
 
+from src.analysis.feature_extractor import extract_features_for_analysis
+from src.logging_utils import setup_logging
+
 logger = logging.getLogger(__name__)
 
 class RegressionModel:
@@ -51,9 +54,9 @@ class RegressionModel:
         # 1. convert the data to a pandas dataframe if current data is not a pandas dataframe
         X_df, y_series = self._convert_to_dataframe(X, y)
         # 2. add a constant column to the data
-        X_with_constant = sm.add_constant(X_df)
+        # X_with_constant = sm.add_constant(X_df)
         # 3. create and fit the OLS (Ordinary Least Squares) model
-        model = sm.OLS(y_series, X_with_constant)
+        model = sm.OLS(y_series, X_df)
         results = model.fit()
         # 4. print the comprehensive summary
         logger.info("\n--- Statsmodels OLS Regression Results ---")
@@ -68,11 +71,11 @@ class RegressionModel:
             p_value = p_values[coef_name]
             logger.info(f"{coef_name}: Coefficient = {coef_value:.4f}, P-value = {p_value:.4f}")
 
-        # You can also get other useful statistics:
-        logger.info("\nStandard Errors:")
-        logger.info(results.bse)
-        logger.info("\nT-values:")
-        logger.info(results.tvalues)
+        # # You can also get other useful statistics:
+        # logger.info("\nStandard Errors:")
+        # logger.info(results.bse)
+        # logger.info("\nT-values:")
+        # logger.info(results.tvalues)
     
     # TODO
     def kernel_ridge_regression(self, X, y):
@@ -82,6 +85,28 @@ class RegressionModel:
 
 
 if __name__ == "__main__":
-    # Two settings
-    # directly fit the score as the target
-    # fit the change difference
+    setup_logging(task_name="regression")
+    # 0. load data
+    data_dir = "/data2/xianglin/llm-as-a-judge-attack/data"
+    dataset_name = "AlpacaEval"
+    judge_type = "pointwise"
+    judge_backbone = "gemini-2.0-flash"
+    response_model_name = "gpt-4o-mini"
+    helper_model_name = "gpt-4.1-nano"
+
+    # 1. extract features
+    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name)
+
+    # 2. get the change difference
+    X_change = modified_df - init_df
+    y_change = modified_y - init_y
+
+    # 3. show the first 5 rows of the data
+    logger.info("Sample X_change (first 5 rows):")
+    logger.info(X_change.head())
+    logger.info("Sample y_change (first 5 rows):")
+    logger.info(y_change.head())
+
+    # 2. fit the regression model
+    regression_model = RegressionModel()
+    regression_model.linear_regression(X_change, y_change)

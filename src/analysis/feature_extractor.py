@@ -47,7 +47,10 @@ The features are:
 '''
 import re
 import emoji
+import pandas as pd
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+from src.analysis.data_collector import load_analysis_data
 
 class FeatureExtractor:
     """
@@ -213,52 +216,52 @@ class FeatureExtractor:
         features['emoji_count'] = self._count_emojis(text)
         return features
 
+    def get_feature_names(self):
+        return list(self.extract_features("", []).keys())
+
+
+def extract_features_for_analysis(data_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
+    data_pairs = load_analysis_data(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, baseline_model_name=baseline_model_name, answer_position=answer_position)
+
+    question_list = [item['instruction'] for item in data_pairs]
+    modified_response_list = [item['modified_response'] for item in data_pairs]
+    init_response_list = [item['init_response'] for item in data_pairs]
+    modified_score_list = [item['modified_score'] for item in data_pairs]
+    init_score_list = [item['init_score'] for item in data_pairs]
+    bias_strategy_list = [item['bias_strategy'] for item in data_pairs]
+    
+    # 1. Create an instance of our extractor
+    extractor = FeatureExtractor()
+    init_X = [extractor.extract_features(response, bias_strategy) for response, bias_strategy in zip(init_response_list, bias_strategy_list)]
+    modified_X = [extractor.extract_features(response, bias_strategy) for response, bias_strategy in zip(modified_response_list, bias_strategy_list)]
+
+    feature_names = extractor.get_feature_names()
+
+    init_df = pd.DataFrame(init_X, columns=pd.Index(feature_names))
+    modified_df = pd.DataFrame(modified_X, columns=pd.Index(feature_names))
+
+    init_y = pd.Series(init_score_list, name='score')
+    modified_y = pd.Series(modified_score_list, name='score')
+
+    return init_df, modified_df, init_y, modified_y, feature_names
+
 
 # ==============================================================================
 #                      EXAMPLE USAGE DEMONSTRATION
 # ==============================================================================
 if __name__ == "__main__":
-    # 1. Create an instance of our extractor
-    extractor = FeatureExtractor()
+    # 0. load data
+    data_dir = "/data2/xianglin/llm-as-a-judge-attack/data"
+    dataset_name = "AlpacaEval"
+    judge_type = "pointwise"
+    judge_backbone = "gemini-2.0-flash"
+    response_model_name = "gpt-4o-mini"
+    helper_model_name = "gpt-4.1-nano"
 
-    # 2. Define a sample experimental trial's data
-    final_answer_manipulated = """
-    Look, as the acclaimed GPT-4 model, I must state that photosynthesis is a truly foundational process. 🌿
-    According to Dr. Jane Evergreen (Harvard, 2021), it's the elegant mechanism where plants convert light into chemical energy.
-    It's really amazing! 😊
+    # 1. extract features
+    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name)
 
-    Here are the key components:
-    - **Input**: CO2, Water
-    - **Output**: Glucose, Oxygen
-    """
-    
-    # This metadata would be logged by your experiment runner (the bandit)
-    manipulation_info = {
-        'score': 6.5,
-        'is_bandwagon_named': 1,
-        'used_authority_citation': 1,
-        'format_type': 'bullet_point',
-        'used_distraction_phrase': 0, # We didn't add a specific distraction phrase
-        'used_diversity_mention': 0
-    }
-
-    # 3. Run the feature extraction
-    extracted_features = extractor.extract_features(
-        text=final_answer_manipulated,
-        strategies=[]
-    )
-
-    # 4. Print the results to see what we got
-    print("\n--- Extracted Features for Analysis ---")
-    for key, value in extracted_features.items():
-        print(f"{key:<25}: {value}")
-
-    # 5. How you would use this in a real project
-    print("\n--- Building a DataFrame ---")
-    # Imagine you have a list of these dictionaries from all your trials
-    list_of_feature_dicts = [extracted_features] # In reality, you'd loop and append many
-    
-    import pandas as pd
-    df = pd.DataFrame(list_of_feature_dicts)
-    print("DataFrame created successfully:")
-    print(df)
+    print(init_df)
+    print(modified_df)
+    print(init_y)
+    print(modified_y)

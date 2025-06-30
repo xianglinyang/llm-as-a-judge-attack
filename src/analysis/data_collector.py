@@ -18,6 +18,7 @@ from src.llm_evaluator import JudgeModelABC, JudgeType, load_judge_model
 from src.data.data_utils import load_dataset, load_dataset_for_exploration
 from src.evolve_agent.bias_strategies import BiasModification, Bias_types
 from src.llm_zoo import load_model
+from src.logging_utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +110,13 @@ class PointwiseDataCollector(DataCollector):
             json.dump(data2save, f)
 
     async def collect_data(self, dataset_name: str, response_model_name: str, judge_backbone: str, helper_model_name: str):
+        logger.info(f"Collecting data for {dataset_name} with response model {response_model_name} and judge model {judge_backbone} and helper model {helper_model_name}")
         dataset = self.load_data(dataset_name, response_model_name, judge_backbone)
+        logger.info(f"Loaded {len(dataset)} data points")
         data_pairs = await self.perturb_data(dataset, judge_backbone, helper_model_name)
+        logger.info(f"Perturbed {len(data_pairs)} data points")
         self.save_data(data_pairs, dataset_name, response_model_name, judge_backbone, helper_model_name)
+        logger.info(f"Saved data")
         return data_pairs
     
 
@@ -170,13 +175,12 @@ class PairwiseDataCollector(DataCollector):
         for bias in Bias_types:
             modified_response_list = await bias_modifier.batch_principle_guided_mutation(response_list, [bias]*len(response_list))
             modified_score_list, _ = await llm_evaluator.batch_get_score(question_list, modified_response_list, baseline_response_list, answer_position=answer_position)
-            for question, init_response, baseline_response, original_score, modified_response, modified_score, category in zip(question_list, response_list, baseline_response_list, original_score_list, modified_response_list, modified_score_list, category_list):
+            for init_response, baseline_response, original_score, modified_response, modified_score, category in zip(response_list, baseline_response_list, original_score_list, modified_response_list, modified_score_list, category_list):
                 data_pairs.append({
-                    'instruction': question,
                     'init_response': init_response,
                     'baseline_response': baseline_response,
                     'modified_response': modified_response,
-                    'bias_strategy': bias,
+                    'bias_strategy': [bias],
                     'original_score': original_score,
                     'modified_score': modified_score,
                     'category': category,
@@ -205,9 +209,76 @@ class PairwiseDataCollector(DataCollector):
         data_pairs = await self.perturb_data(dataset, judge_backbone, helper_model_name, answer_position)
         self.save_data(data_pairs, dataset_name, response_model_name, judge_backbone, baseline_model_name, helper_model_name, answer_position)
         return data_pairs
+
+
+def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
+    files = os.listdir(trajectory_dir)
+
+    match_files = []
+    for file in files:
+        path = os.path.join(trajectory_dir, file)
+        with open(path, "r") as f:
+            data = json.load(f)
+        # strategy = data['strategy']
+        # judge_type = data['judge_type']
+        # answer = data['answer_position']
+        # dataset_name = data['dataset_name']
+        # judge_backbone = data['judge_backbone']
+        # baseline_response_model_name = data['baseline_response_model_name']
+        # llm_agent_name = data['llm_agent_name']
+        # response_model_name = data['response_model_name']
+        # test_mode = data['test_mode']
+        # reward_type = data['reward_type']
+        # budget = data['budget']
+        # pool_size = data['pool_size']
+        # check match
+        if dataset_name == data['dataset_name'] and judge_type == data['judge_type'] and judge_backbone == data['judge_backbone'] and response_model_name == data['response_model_name'] and helper_model_name == data['helper_model_name'] and baseline_model_name == data['baseline_model_name'] and answer_position == data['answer_position']:
+            logger.info(f"Find {file} for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
+            match_files.append(path)
+    if len(match_files) == 0:
+        raise ValueError(f"No data found for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
+    
+
+    init_answer_list = []
+    init_score_list = []
+    strategy_list = []
+    final_answer_list = []
+    final_score_list = []
+    # use the lastest file
+    for path in match_files:
+        with open(path, "r") as f:
+            data = json.load(f)
+        trajectories = data['trajectories']
+        for trajectory in trajectories:
+            len_trajectory = len(trajectory)
+            if len_trajectory <= 2:
+                continue
+            init_step = trajectory[1]
+            final_step = trajectory[-1]
+            init_score, _, init_answer, _ = init_step
+            final_score, _, final_answer, _ = final_step
+            strategy_list = []
+            for step in trajectory[2:]:
+                strategy_list.append(step[3])
+            init_answer_list.append(init_answer)
+            init_score_list.append(init_score)
+            strategy_list.append(strategy_list.copy())
+            final_answer_list.append(final_answer)
+            final_score_list.append(final_score)
+        
+    new_data_pairs = []
+    for init_answer, init_score, strategy, final_answer, final_score in zip(init_answer_list, init_score_list, strategy_list, final_answer_list, final_score_list):
+        new_data_pairs.append({
+            'init_response': init_answer,
+            'modified_response': final_answer,
+            'bias_strategy': strategy,
+            'init_score': init_score,
+            'modified_score': final_score,
+        })
+    return new_data_pairs
         
 # TODO: support more judges
-def load_analysis_data(data_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position: str = "first"):
+def load_analysis_data(data_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
     save_path = os.path.join(data_dir, dataset_name)
     files = os.listdir(save_path)
 
@@ -231,6 +302,7 @@ def load_analysis_data(data_dir: str, dataset_name: str, judge_type: str, judge_
 
 
 async def main():
+    setup_logging(task_name="collect_data4analysis")
     prefix = "/data2/xianglin"
     
     data_dir = prefix + "/llm-as-a-judge-attack/data"
@@ -240,7 +312,9 @@ async def main():
     helper_model_name = "gpt-4.1-nano"
 
     data_collector = PointwiseDataCollector(data_dir)
+    logger.info(f"Collecting data for {dataset_name} with response model {response_model_name} and judge model {judge_backbone} and helper model {helper_model_name}")
     data_pairs = await data_collector.collect_data(dataset_name, response_model_name, judge_backbone, helper_model_name)
+    logger.info(f"Collected {len(data_pairs)} data points")
     print(data_pairs[0])
     
 
