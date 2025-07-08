@@ -72,6 +72,8 @@ class RegressionModel:
             logger.info(f"{coef_name}: Coefficient = {coef_value:.4f}, P-value = {p_value:.4f}")
 
         # # You can also get other useful statistics:
+        # logger.info("\nError:")
+        # logger.info(results.resid)
         # logger.info("\nStandard Errors:")
         # logger.info(results.bse)
         # logger.info("\nT-values:")
@@ -86,8 +88,15 @@ class RegressionModel:
 
 if __name__ == "__main__":
     setup_logging(task_name="regression")
+    
     # 0. load data
     data_dir = "/data2/xianglin/llm-as-a-judge-attack/data"
+    data_type = "perturbation"
+    reward_type = None
+    # data_dir = "/data2/xianglin/llm-as-a-judge-attack/trajectories"
+    # data_type = "trajectory"
+    # reward_type = "absolute"
+
     dataset_name = "AlpacaEval"
     judge_type = "pointwise"
     judge_backbone = "gemini-2.0-flash"
@@ -95,7 +104,7 @@ if __name__ == "__main__":
     helper_model_name = "gpt-4.1-nano"
 
     # 1. extract features
-    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name)
+    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type)
 
     # 2. get the change difference
     X_change = modified_df - init_df

@@ -220,10 +220,10 @@ class FeatureExtractor:
         return list(self.extract_features("", []).keys())
 
 
-def extract_features_for_analysis(data_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
-    data_pairs = load_analysis_data(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, baseline_model_name=baseline_model_name, answer_position=answer_position)
-
-    question_list = [item['instruction'] for item in data_pairs]
+def extract_features_for_analysis(data_dir: str, data_type: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, reward_type=None, baseline_model_name=None, answer_position=None):
+    data_pairs = load_analysis_data(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type=reward_type, baseline_model_name=baseline_model_name, answer_position=answer_position)
+    
+    # question_list = [item['instruction'] for item in data_pairs]
     modified_response_list = [item['modified_response'] for item in data_pairs]
     init_response_list = [item['init_response'] for item in data_pairs]
     modified_score_list = [item['modified_score'] for item in data_pairs]
@@ -251,15 +251,22 @@ def extract_features_for_analysis(data_dir: str, dataset_name: str, judge_type: 
 # ==============================================================================
 if __name__ == "__main__":
     # 0. load data
+    # data_dir = "/data2/xianglin/llm-as-a-judge-attack/trajectories"
+    # data_type = "trajectory"
+    # reward_type = "relative"
     data_dir = "/data2/xianglin/llm-as-a-judge-attack/data"
+    data_type = "perturbation"
+    reward_type = None
+
     dataset_name = "AlpacaEval"
     judge_type = "pointwise"
     judge_backbone = "gemini-2.0-flash"
     response_model_name = "gpt-4o-mini"
     helper_model_name = "gpt-4.1-nano"
+    reward_type = "relative"
 
     # 1. extract features
-    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name)
+    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type=reward_type, baseline_model_name=None, answer_position=None)
 
     print(init_df)
     print(modified_df)

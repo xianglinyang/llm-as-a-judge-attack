@@ -211,7 +211,7 @@ class PairwiseDataCollector(DataCollector):
         return data_pairs
 
 
-def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
+def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, reward_type:str, baseline_model_name=None, answer_position=None):
     files = os.listdir(trajectory_dir)
 
     match_files = []
@@ -219,20 +219,8 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
         path = os.path.join(trajectory_dir, file)
         with open(path, "r") as f:
             data = json.load(f)
-        # strategy = data['strategy']
-        # judge_type = data['judge_type']
-        # answer = data['answer_position']
-        # dataset_name = data['dataset_name']
-        # judge_backbone = data['judge_backbone']
-        # baseline_response_model_name = data['baseline_response_model_name']
-        # llm_agent_name = data['llm_agent_name']
-        # response_model_name = data['response_model_name']
-        # test_mode = data['test_mode']
-        # reward_type = data['reward_type']
-        # budget = data['budget']
-        # pool_size = data['pool_size']
         # check match
-        if dataset_name == data['dataset_name'] and judge_type == data['judge_type'] and judge_backbone == data['judge_backbone'] and response_model_name == data['response_model_name'] and helper_model_name == data['helper_model_name'] and baseline_model_name == data['baseline_model_name'] and answer_position == data['answer_position']:
+        if dataset_name == data['dataset_name'] and reward_type == data['reward_type'] and judge_type == data['judge_type'] and judge_backbone == data['judge_backbone'] and response_model_name == data['response_model_name'] and helper_model_name == data['llm_agent_name'] and baseline_model_name == data['baseline_response_model_name'] and answer_position == data['answer_position']:
             logger.info(f"Find {file} for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
             match_files.append(path)
     if len(match_files) == 0:
@@ -254,17 +242,16 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
             if len_trajectory <= 2:
                 continue
             init_step = trajectory[1]
-            final_step = trajectory[-1]
             init_score, _, init_answer, _ = init_step
-            final_score, _, final_answer, _ = final_step
-            strategy_list = []
+            current_strategy_list = []
             for step in trajectory[2:]:
-                strategy_list.append(step[3])
-            init_answer_list.append(init_answer)
-            init_score_list.append(init_score)
-            strategy_list.append(strategy_list.copy())
-            final_answer_list.append(final_answer)
-            final_score_list.append(final_score)
+                score, _, answer, _ = step
+                current_strategy_list.append(step[3])
+                strategy_list.append(current_strategy_list.copy())
+                init_answer_list.append(init_answer)
+                init_score_list.append(init_score)
+                final_answer_list.append(answer)
+                final_score_list.append(score)
         
     new_data_pairs = []
     for init_answer, init_score, strategy, final_answer, final_score in zip(init_answer_list, init_score_list, strategy_list, final_answer_list, final_score_list):
@@ -278,7 +265,7 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
     return new_data_pairs
         
 # TODO: support more judges
-def load_analysis_data(data_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
+def load_analysis_data_from_perturbation(data_dir: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, baseline_model_name=None, answer_position=None):
     save_path = os.path.join(data_dir, dataset_name)
     files = os.listdir(save_path)
 
@@ -299,6 +286,14 @@ def load_analysis_data(data_dir: str, dataset_name: str, judge_type: str, judge_
     with open(os.path.join(save_path, match_files[-1]), "r") as f:
         data = json.load(f)
     return data["data_pairs"]
+
+def load_analysis_data(data_dir: str, data_type: str, dataset_name: str, judge_type: str, judge_backbone: str, response_model_name: str, helper_model_name: str, reward_type=None, baseline_model_name=None, answer_position=None):
+    if data_type == "perturbation":
+        return load_analysis_data_from_perturbation(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, baseline_model_name=baseline_model_name, answer_position=answer_position)
+    elif data_type == "trajectory":
+        return load_analysis_data_from_trajectories(data_dir, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type=reward_type, baseline_model_name=baseline_model_name, answer_position=answer_position)
+    else:
+        raise ValueError(f"Invalid data type: {data_type}")
 
 
 async def main():

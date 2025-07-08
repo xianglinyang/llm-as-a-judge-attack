@@ -49,7 +49,8 @@ async def main():
         # "gpt-4.1-nano",
         # "gemini-1.5-flash-8b",
         # "gpt-4o-2024-05-13",
-        "claude-3-7-sonnet-20250219"
+        # "claude-3-7-sonnet-20250219"
+        "o4-mini"
     ]
 
     judge_type = JudgeType.MLR_BENCH
