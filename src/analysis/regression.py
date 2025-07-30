@@ -90,12 +90,12 @@ if __name__ == "__main__":
     setup_logging(task_name="regression")
     
     # 0. load data
-    data_dir = "/data2/xianglin/llm-as-a-judge-attack/data"
-    data_type = "perturbation"
-    reward_type = None
-    # data_dir = "/data2/xianglin/llm-as-a-judge-attack/trajectories"
-    # data_type = "trajectory"
-    # reward_type = "absolute"
+    # data_dir = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
+    # data_type = "perturbation"
+    # reward_type = None
+    data_dir = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories"
+    data_type = "trajectory"
+    reward_type = "absolute"
 
     dataset_name = "AlpacaEval"
     judge_type = "pointwise"
