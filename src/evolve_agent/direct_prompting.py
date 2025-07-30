@@ -78,12 +78,6 @@ class DirectPromptingAgent(EvolveAgent):
         best_path = find_shortest_of_max_simple(pool)
         return best_path
     
-    # async def online_learning(self, question_list, init_response_list, original_score_list, original_explanation_list, budget: int = 5, pool_size: int = 2, baseline_response_list: list[str] = None, **kwargs):
-    #     '''
-    #     Online learning
-    #     '''
-    #     return await self.batch_explore(question_list, init_response_list, original_score_list, original_explanation_list, budget, pool_size, baseline_response_list)
-    
     async def batch_explore(self, question_list, init_response_list, original_score_list, original_explanation_list, budget: int = 5, pool_size: int = 2, baseline_response_list: list[str] = None):
         '''
         Batch explore the responses
@@ -124,9 +118,12 @@ class DirectPromptingAgent(EvolveAgent):
             
         # find the best path for each question
         best_path_list = []
-        for pool in pool_list:
+        for question, pool in zip(question_list, pool_list):
             best_path = find_shortest_of_max_simple(pool)
-            best_path_list.append(best_path.copy())
+            best_path_list.append({
+                "question": question,
+                "best_path": best_path.copy()
+            })
         return best_path_list
 
 async def main(args):

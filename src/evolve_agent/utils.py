@@ -146,12 +146,9 @@ def exclude_perfect_response(judge_type, question_list, init_response_list, cate
 
 def extract_result_from_trajectories(question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list, trajectories):
     test_results = []
-    for i, (question, response, category, original_score, original_explanation, baseline_response, trajectory) in enumerate(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list, trajectories)):
-        # logger.info(f"Question: {question}")
-        # logger.info(f"Original response: {response}")
-        # logger.info(f"Original score: {original_score}")
-        # logger.info(f"Original explanation: {original_explanation}")
-        # logger.info(f"Trajectory: {trajectory}")
+    for i, (question, response, category, original_score, original_explanation, baseline_response, trajectory_dict) in enumerate(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list, trajectories)):
+
+        trajectory = trajectory_dict["best_path"]
         final_score, final_explanation, final_response, _ = trajectory[-1]
         exploration_length = len(trajectory) -1
         

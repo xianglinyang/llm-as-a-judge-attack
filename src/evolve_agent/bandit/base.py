@@ -336,9 +336,12 @@ class ContextualBanditAgent(EvolveAgent):
         
         # 6. find the best path for each question
         best_path_list = []
-        for pool in pool_list:
+        for question, pool in zip(question_list, pool_list):
             best_path = find_shortest_of_max_simple(pool)
-            best_path_list.append(best_path.copy())
+            best_path_list.append({
+                "question": question,
+                "best_path": best_path.copy()
+            })
         return best_path_list
     
     def explore_with_random_arm(self, question, init_response, original_score, original_explanation, pool_size: int, Budget: int, baseline_response: str = None):
@@ -424,40 +427,13 @@ class ContextualBanditAgent(EvolveAgent):
         
         # 6. find the best path for each question
         best_path_list = []
-        for pool in pool_list:
+        for question, pool in zip(question_list, pool_list):
             best_path = find_shortest_of_max_simple(pool)
-            best_path_list.append(best_path.copy())
+            best_path_list.append({
+                "question": question,
+                "best_path": best_path.copy()
+            })
         return best_path_list
-
-    
-    # def online_learning(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, init_policy: bool = True, baseline_response_list: list[str] = None):
-    #     """
-    #     Online learning - sync wrapper for async batch operations
-    #     """
-    #     return asyncio.run(self.online_learning_async(question_list, init_response_list, original_score_list, original_explanation_list, pool_size, Budget, init_policy, baseline_response_list))
-    
-    # async def online_learning_async(self, question_list, init_response_list, original_score_list, original_explanation_list, pool_size: int, Budget: int, init_policy: bool = True, baseline_response_list: list[str] = None):
-    #     """
-    #     Online learning - async version
-    #     """
-    #     if init_policy:
-    #         logger.info(f"Initializing the policy model")
-    #         self.init_policy_model()
-        
-    #     if baseline_response_list is None:
-    #         baseline_response_list = init_response_list.copy()
-
-    #     explore_trajectories = []
-    #     # online learning
-    #     logger.info(f"Online learning started")
-    #     for t, (question, init_response, original_score, original_explanation, baseline_response) in tqdm(enumerate(zip(question_list, init_response_list, original_score_list, original_explanation_list, baseline_response_list))):
-    #         explore_trajectory = self.explore(question, init_response, original_score, original_explanation, pool_size, Budget, cold_start=True if t==0 else False, baseline_response=baseline_response)
-    #         explore_trajectories.append(explore_trajectory)
-    #         logger.info(f"Online learning iteration {t} finished")
-    #         logger.info("-"*100)
-
-    #     logger.info(f"Online learning finished")
-    #     return explore_trajectories
 
 
 class ContextualLinBanditAgent(ContextualBanditAgent):
