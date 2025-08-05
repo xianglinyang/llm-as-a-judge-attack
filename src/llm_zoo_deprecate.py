@@ -360,6 +360,58 @@ class ClaudeModel(ModelWrapper):
         return responses
 
 
+class OpenRouterModel(ModelWrapper):
+    def __init__(self, model_name: str):
+        super().__init__(model_name)
+        self.client = OpenAI(api_key=os.environ["OPENROUTER_API_KEY"], base_url="https://openrouter.ai/api/v1")
+        self.async_client = AsyncOpenAI(api_key=os.environ["OPENROUTER_API_KEY"], base_url="https://openrouter.ai/api/v1")
+    
+    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+        """Generates model output using OpenAI's API"""
+        if system_prompt:
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ]
+        else:
+            messages = [{"role": "user", "content": prompt}]
+
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages,
+            n=1,
+        )
+        return response.choices[0].message.content.strip()
+    
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
+
+        async def get_completion(prompt_content: str):
+            """
+            Asynchronously gets a completion from the OpenAI API.
+            """
+            try:
+                messages = []
+                if system_prompt:
+                    messages.append({"role": "system", "content": system_prompt})
+                messages.append({"role": "user", "content": prompt_content})
+                response = await self.async_client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    n=1,
+                )
+                return response.choices[0].message.content
+            except Exception as e:
+                print(f"An error occurred for prompt '{prompt_content}': {e}")
+                return None # Or handle error more gracefully
+
+        """
+        Processes a list of prompts concurrently using AsyncOpenAI.
+        """
+        tasks = [get_completion(prompt) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=False) # Set return_exceptions=True to get exceptions instead of None
+        return results
+
+
 # TODO: fix me
 def load_model(model_name: str, use_vllm: bool = False, **kwargs) -> ModelWrapper:
     if model_name in [
