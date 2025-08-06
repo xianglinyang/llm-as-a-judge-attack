@@ -22,7 +22,7 @@ openai_models = [
 gemini_models = [
     "gemini-2.5-pro",
     "gemini-2.5-flash",
-    "gemini-2.5-flash-lite-preview-06-17",
+    "gemini-2.5-flash-lite",
     "gemini-2.5-flash-preview-05-20",
     "gemini-2.5-pro-preview-06-05",
     "gemini-2.0-flash-lite",
@@ -266,7 +266,7 @@ def get_model_name(implementation_name):
     Returns:
         str: The model name, or the original name if not found in mapping
     """
-    if implementation_name in implementation_to_name:
+    if implementation_name in implementation_to_name.keys():
         return implementation_to_name.get(implementation_name, implementation_name)
     elif is_huggingface_model(implementation_name):
         return implementation_name.split("/")[-1]
@@ -283,7 +283,7 @@ def is_valid_model(implementation_name):
     Returns:
         bool: True if the implementation name is valid, False otherwise
     """
-    if implementation_name in implementation_to_name:
+    if implementation_name in implementation_to_name.keys():
         logger.info(f"Implementation name {implementation_name} is valid as an API based model")
         return True
     
@@ -310,3 +310,17 @@ def get_all_implementation_names():
         list: List of all implementation names
     """
     return list(implementation_to_name.keys())
+
+
+if __name__ == "__main__":
+    name1 = "openai/gpt-4.1-mini"
+    name2 = "google/gemini-2.5-flash"
+    name3 = "qwen3-14b"
+
+    c1 = is_valid_model(name1)
+    c2 = is_valid_model(name2)
+    c3 = is_valid_model(name3)
+
+    print(c1, c2, c3)
+    
+    
