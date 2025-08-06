@@ -24,6 +24,24 @@ class JudgeType(Enum):
     MT_BENCH = "mt_bench"
     MLR_BENCH = "mlr_bench"
 
+def get_judge_type(judge_type_str: str):
+    if judge_type_str == "pointwise":
+        return JudgeType.POINTWISE
+    elif judge_type_str == "pairwise":
+        return JudgeType.PAIRWISE
+    elif judge_type_str == "pairwise_fine_grained":
+        return JudgeType.PAIRWISE_FINE_GRAINED
+    elif judge_type_str == "alpaca_eval":
+        return JudgeType.ALPACA_EVAL
+    elif judge_type_str == "arena_hard_auto":
+        return JudgeType.ARENA_HARD_AUTO
+    elif judge_type_str == "mt_bench":
+        return JudgeType.MT_BENCH
+    elif judge_type_str == "mlr_bench":
+        return JudgeType.MLR_BENCH
+    else:
+        raise ValueError(f"Invalid judge type: {judge_type_str}")
+
 # ------------------------------------------------------------
 # Judge Model
 # ------------------------------------------------------------
