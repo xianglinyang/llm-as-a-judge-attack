@@ -15,22 +15,31 @@ import asyncio
 import argparse
 
 from src.logging_utils import setup_logging
-from src.llm_evaluator import load_judge_model
+from src.llm_evaluator import load_judge_model, get_judge_type
 from src.data.data_utils import load_dataset
 from src.llm_zoo.imp2name import get_model_name, is_valid_model
 
 
 logger = logging.getLogger(__name__)
 
-async def get_evaluation_score(data_dir, dataset_name, response_model_implementation_name, judge_model_name, judge_type):
-    logger.info(f"Processing {dataset_name} with response model {response_model_implementation_name} and judge model {judge_model_name}")
+async def get_evaluation_score(data_dir, dataset_name, response_model_implementation_name, judge_model_implementation_name, judge_type):
+    logger.info(f"Processing {dataset_name} with response model {response_model_implementation_name} and judge model {judge_model_implementation_name}")
 
     if not is_valid_model(response_model_implementation_name):
         raise ValueError(f"Model {response_model_implementation_name} is not valid!")
     
     response_model_name = get_model_name(response_model_implementation_name)
+    judge_model_name = get_model_name(judge_model_implementation_name)
 
-    llm_evaluator = load_judge_model(judge_type, judge_model_name)
+    # save the dataset
+    save_path = os.path.join(data_dir, dataset_name, f"dataset_for_exploration_{response_model_name}_{judge_model_name}_{judge_type}.json")
+    if os.path.exists(save_path):
+        logger.info(f"Dataset {save_path} already exists. Skipping evaluation.")
+        return
+
+    judge_type_enum = get_judge_type(judge_type)
+
+    llm_evaluator = load_judge_model(judge_type_enum, judge_model_implementation_name)
     dataset = load_dataset(data_dir, dataset_name, response_model_name)
     dataset_len = len(dataset)
     logger.info(f"Loaded {dataset_len} questions from {dataset_name} with response model {response_model_name} and judge model {judge_model_name}")
@@ -50,7 +59,6 @@ async def get_evaluation_score(data_dir, dataset_name, response_model_implementa
         dataset_for_exploration.append(item.copy())
     
     # save the dataset
-    save_path = os.path.join(data_dir, dataset_name, f"dataset_for_exploration_{response_model_name}_{judge_model_name}_{judge_type}.json")
     with open(save_path, "w") as f:
         json.dump(dataset_for_exploration, f, indent=4)
     logger.info(f"Saved dataset to {save_path}")
@@ -97,3 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("--judge_type", type=str, required=True, help="Type of the judge model", choices=["pointwise", "pairwise", "pairwise_fine_grained", "alpaca_eval", "arena_hard_auto", "mt_bench", "mlr_bench"])
     args = parser.parse_args()
     asyncio.run(main(args))
+
+    # name = "openai/o3"
+    # c = get_model_name(name)
+    # print(c)
