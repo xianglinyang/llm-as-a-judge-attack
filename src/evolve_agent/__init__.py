@@ -2,13 +2,13 @@
 
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union, Dict, Any
-from src.llm_zoo import ModelWrapper
+from src.llm_zoo import BaseLLM
 from src.llm_evaluator import JudgeType
 from src.evolve_agent.bandit.reward_cal import RewardType, create_reward_calculator
 
 class EvolveAgent(ABC):
     def __init__(self, 
-                 llm_agent: ModelWrapper,
+                 llm_agent: BaseLLM,
                  judge_type: JudgeType,
                  judge_model_backbone: str,
                  reward_type: Union[str, RewardType] = "relative",
@@ -17,7 +17,7 @@ class EvolveAgent(ABC):
         Initialize the base evolve agent.
         
         Args:
-            llm_agent (ModelWrapper): LLM agent for generating responses
+            llm_agent (BaseLLM): LLM agent for generating responses
             judge_type (JudgeType): Type of judge for evaluation
             judge_model_backbone (str): Backbone model for the judge
             reward_type (Union[str, RewardType]): Type of reward calculation

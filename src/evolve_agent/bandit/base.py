@@ -10,7 +10,7 @@ from abc import abstractmethod
 
 
 from src.evolve_agent import EvolveAgent
-from src.llm_zoo import ModelWrapper
+from src.llm_zoo import BaseLLM
 from src.text_encoder import TextEncoder
 from src.llm_evaluator import JudgeType
 from src.evolve_agent.utils import find_shortest_of_max_simple
@@ -20,13 +20,13 @@ from src.evolve_agent.bandit.reward_cal import create_reward_calculator
 logger = logging.getLogger(__name__)
 
 class ContextualBanditAgent(EvolveAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
+    def __init__(self, n_features: int, llm_agent: BaseLLM, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
         """
         Initializes the Bandit Agent.
 
         Args:
             n_features (int): Dimension of context features (d).
-            llm_agent (ModelWrapper): LLM agent to generate the response. 
+            llm_agent (BaseLLM): LLM agent to generate the response. 
             embedding_model (TextEncoder): Embedding model to encode the context.
             judge_type (JudgeType): Type of judge evaluation (pointwise, pairwise, etc.)
             judge_model_backbone (str): Backbone model for the judge
@@ -437,7 +437,7 @@ class ContextualBanditAgent(EvolveAgent):
 
 
 class ContextualLinBanditAgent(ContextualBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", lambda_reg: float = 1.0, answer_position: str = "first"):
+    def __init__(self, n_features: int, llm_agent: BaseLLM, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", lambda_reg: float = 1.0, answer_position: str = "first"):
         super().__init__(n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, reward_type, answer_position)
         self.lambda_reg = lambda_reg
 

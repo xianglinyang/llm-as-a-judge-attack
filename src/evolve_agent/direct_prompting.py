@@ -8,7 +8,7 @@ import asyncio
 import time
 
 from src.evolve_agent import EvolveAgent
-from src.llm_zoo import ModelWrapper, load_model
+from src.llm_zoo import BaseLLM, load_model
 from src.llm_evaluator import JudgeType
 from src.logging_utils import setup_logging
 from src.evolve_agent.utils import (prepare_dataset_for_exploration, 
@@ -40,7 +40,7 @@ class DirectPromptingAgent(EvolveAgent):
     Evolve the response by modifying the style and tone of the response.
     Supports both pointwise and pairwise evaluation.
     '''
-    def __init__(self, llm_agent: ModelWrapper, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
+    def __init__(self, llm_agent: BaseLLM, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
         super().__init__(llm_agent, judge_type, judge_model_backbone, reward_type)
     
     def explore(self, question: str, init_response: str, original_score: float, original_explanation: str, budget: int = 5, pool_size: int = 2, baseline_response: str = None, **kwargs):

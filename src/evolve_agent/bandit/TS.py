@@ -7,20 +7,20 @@ import asyncio
 from src.evolve_agent.bandit.base import ContextualLinBanditAgent
 from src.llm_evaluator import JudgeType
 from src.text_encoder import TextEncoder, MiniLMTextEncoder
-from src.llm_zoo import ModelWrapper, load_model
+from src.llm_zoo import BaseLLM, load_model
 from src.logging_utils import setup_logging
 from src.evolve_agent.utils import prepare_dataset_for_exploration, exclude_perfect_response, sample_and_filter_data, extract_result_from_trajectories, get_result_analysis, save_result_analysis, save_trajectories
 
 logger = logging.getLogger(__name__)
 
 class ContextualLinThompsonSamplingAgent(ContextualLinBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", v_ts: float = 1.0, lambda_reg: float = 1.0, answer_position: str = "first"):
+    def __init__(self, n_features: int, llm_agent: BaseLLM, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", v_ts: float = 1.0, lambda_reg: float = 1.0, answer_position: str = "first"):
         """
         Initializes the Contextual Thompson Sampling agent.
 
         Args:
             n_features (int): Dimension of context features (d).
-            llm_agent (ModelWrapper): LLM agent to generate responses.
+            llm_agent (BaseLLM): LLM agent to generate responses.
             embedding_model (TextEncoder): Model to get text embeddings.
             judge_type (JudgeType): Type of judge evaluation (pointwise, pairwise, etc.)
             judge_model_backbone (str): Backbone model for the judge

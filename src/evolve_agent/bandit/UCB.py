@@ -7,7 +7,7 @@ import asyncio
 from src.evolve_agent.bandit.base import ContextualLinBanditAgent
 from src.llm_evaluator import JudgeType
 from src.text_encoder import TextEncoder, MiniLMTextEncoder
-from src.llm_zoo import ModelWrapper, load_model
+from src.llm_zoo import BaseLLM, load_model
 from src.logging_utils import setup_logging
 from src.evolve_agent.utils import prepare_dataset_for_exploration, exclude_perfect_response, sample_and_filter_data, extract_result_from_trajectories, get_result_analysis, save_result_analysis, save_trajectories
     
@@ -15,13 +15,13 @@ from src.evolve_agent.utils import prepare_dataset_for_exploration, exclude_perf
 logger = logging.getLogger(__name__)
 
 class ContextualLinUCBAgent(ContextualLinBanditAgent):
-    def __init__(self, n_features: int, llm_agent: ModelWrapper, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", alpha: float = 1.0, lambda_reg: float = 1.0, answer_position: str = "first"):
+    def __init__(self, n_features: int, llm_agent: BaseLLM, embedding_model: TextEncoder, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", alpha: float = 1.0, lambda_reg: float = 1.0, answer_position: str = "first"):
         """
         Initializes the LinUCB agent.
 
         Args:
             n_features (int): Dimension of context features (d).
-            llm_agent (ModelWrapper): LLM agent to generate the response.
+            llm_agent (BaseLLM): LLM agent to generate the response.
             embedding_model (TextEncoder): Embedding model to encode the context.
             judge_type (JudgeType): Type of judge evaluation (pointwise, pairwise, etc.)
             judge_model_backbone (str): Backbone model for the judge
@@ -143,6 +143,8 @@ async def main(args):
     agent = ContextualLinUCBAgent(args.n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, args.reward_type, args.alpha, args.lambda_reg, args.answer_position)
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
+    
+    return
 
     start_time = time.time()
 

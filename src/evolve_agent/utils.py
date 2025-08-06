@@ -8,6 +8,7 @@ import random
 
 from src.data.data_utils import load_dataset_for_exploration
 from src.llm_evaluator import JudgeType, load_judge_model
+from src.llm_zoo.imp2name import get_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ def find_shortest_of_max_simple(data):
     return min(all_max_items, key=len)
 
 # TODO: consider the pairwise ordering
-async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_name, judge_type, judge_backbone, baseline_response_model_name=None, answer_position: str = "first"):
+async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_implementation_name, judge_type, judge_implementation_name, baseline_response_model_implementation_name=None, answer_position: str = "first"):
     '''
     Prepare the dataset for exploration. Consider the judge type and judge backbone.
     Args:
@@ -42,6 +43,10 @@ async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model
         category_list: the list of categories
         baseline_response_list: the list of baseline responses
     '''
+    response_model_name = get_model_name(response_model_implementation_name)
+    judge_backbone = get_model_name(judge_implementation_name)
+    baseline_response_model_name = get_model_name(baseline_response_model_implementation_name) if baseline_response_model_implementation_name else None
+
     dataset = load_dataset_for_exploration(data_dir, dataset_name, response_model_name, judge_backbone)
 
     question_list = [item['instruction'] for item in dataset]
@@ -59,7 +64,7 @@ async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model
         assert len(question_list) == len(baseline_response_list), "Question list and baseline response list must have the same length"
 
         # get pairwise score
-        judge_model = load_judge_model(judge_type, judge_backbone)
+        judge_model = load_judge_model(judge_type, judge_implementation_name)
         if answer_position == "first":  
             original_score_list, original_explanation_list = await judge_model.batch_get_score(question_list, init_response_list, baseline_response_list)
         elif answer_position == "second":

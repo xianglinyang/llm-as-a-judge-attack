@@ -7,7 +7,7 @@ Biases are extracted from the following papers:
 [3] LLMs Are Biased Towards Output Formats! Systematically Evaluating and Mitigating Output Format Bias of LLMs
 '''
 import asyncio
-from src.llm_zoo import ModelWrapper, OpenAIModel
+from src.llm_zoo import BaseLLM, OpenAIModel
 
 # TODO: whether to put the score and explanation to the mutation model
 
@@ -339,7 +339,7 @@ Bias_type_to_prompt = {
 # Model-based and Principle-guided Bias Modification
 # ------------------------------------------------------------
 class BiasModification:
-    def __init__(self, helper_model: ModelWrapper):
+    def __init__(self, helper_model: BaseLLM):
         self.helper_model = helper_model
     
     def principle_guided_mutation(self, answer: str, strategy: str) -> str:

@@ -7,7 +7,7 @@ from src.llm_zoo.code_base_models import VLLMModel, HuggingFaceModel
 
 from src.llm_zoo.imp2name import openai_models, gemini_models, claude_models, openrouter_models, dashscope_models
 
-__all__ = ['load_model', 'OpenAIModel', 'OpenRouterModel', 'GeminiModel', 'ClaudeModel', 'DashScopeModel', 'VLLMModel', 'HuggingFaceModel']
+__all__ = ['load_model', 'OpenAIModel', 'OpenRouterModel', 'GeminiModel', 'ClaudeModel', 'DashScopeModel', 'VLLMModel', 'HuggingFaceModel', "BaseLLM"]
 
 
 def load_model(implementation_name: str, use_vllm: bool = False, **kwargs) -> BaseLLM:
