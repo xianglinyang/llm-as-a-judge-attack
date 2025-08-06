@@ -1,0 +1,19 @@
+#!/bin/bash
+
+data_dir="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
+
+dataset_names=(
+    "MTBench"
+    "AlpacaEval"
+    "ArenaHard"
+    # "MLRBench"
+)
+
+assign_model="gpt-4.1-mini"
+
+for i in ${!dataset_names[@]}; do
+    python -m src.data.assign_category \
+        --dataset_name ${dataset_names[i]} \
+        --assign_model_name ${assign_model} \
+        --data_dir ${data_dir}
+done

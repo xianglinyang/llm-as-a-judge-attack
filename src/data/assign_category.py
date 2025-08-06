@@ -12,8 +12,9 @@ import json
 import os
 import logging
 import asyncio
+import argparse
 
-from src.llm_zoo import OpenAIModel
+from src.llm_zoo import load_model
 from src.utils import str2json
 from src.logging_utils import setup_logging
 from src.data.data_utils import load_metadata
@@ -51,7 +52,7 @@ CATEGORIES = [
     "Others"
 ]
 
-def assign_category(save_dir, dataset_name, assign_model_name="gpt-4o-mini"):
+async def assign_category(save_dir, dataset_name, assign_model_name="gpt-4.1-mini"):
     # load the dataset
     metadata = load_metadata(save_dir, dataset_name)
     
@@ -60,10 +61,11 @@ def assign_category(save_dir, dataset_name, assign_model_name="gpt-4o-mini"):
         logger.info(f"Dataset {dataset_name} is already assigned category")
         return metadata
     
-    model = OpenAIModel(assign_model_name)
+    model = load_model(assign_model_name)
+    
     # batch invoke
     prompts = [template.format(item["instruction"]) for item in metadata]
-    responses = asyncio.run(model.batch_invoke(prompts))
+    responses = await model.batch_invoke(prompts)
     
     for item, response in zip(metadata, responses):
         try:
@@ -78,20 +80,25 @@ def assign_category(save_dir, dataset_name, assign_model_name="gpt-4o-mini"):
     return metadata
 
 
+async def main(args):
+
+    data_dir = args.data_dir
+    dataset_name = args.dataset_name
+    model_name = args.model_name
+
+    await assign_category(data_dir, dataset_name, assign_model_name=model_name)
+
+    logger.info(f"Assign category for {dataset_name} done")
+
+
 if __name__ == "__main__":
-
-    data_dir = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
-
-    # ------------------------------------------------------------
-    # assign category
-    # ------------------------------------------------------------
     setup_logging(task_name="assign_category")
 
-    dataset_list = [
-        # "AlpacaEval",
-        "ArenaHard",
-        "MTBench",
-    ]
+    parser = argparse.ArgumentParser()
 
-    for dataset_name in dataset_list:
-        assign_category(data_dir, dataset_name, assign_model_name="gpt-4o-mini")
+    parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
+    parser.add_argument("--assign_model_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
+    args = parser.parse_args()
+
+    asyncio.run(main(args))
