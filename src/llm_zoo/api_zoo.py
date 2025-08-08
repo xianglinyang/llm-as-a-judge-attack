@@ -17,6 +17,10 @@ openai_models = [
     "o4-mini",
     "o3-mini",
     "o3",
+    "gpt-5",
+    "gpt-5-mini",
+    "gpt-5-nano",
+    "gpt-5-chat-latest",
 ]
 
 gemini_models = [
@@ -130,6 +134,10 @@ implementation_to_name = {
     "o4-mini": "o4-mini",
     "o3-mini": "o3-mini",
     "o3": "o3",
+    "gpt-5": "gpt-5",
+    "gpt-5-mini": "gpt-5-mini",
+    "gpt-5-nano": "gpt-5-nano",
+    "gpt-5-chat-latest": "gpt-5-chat-latest",
 
     # Gemini models
     "gemini-2.5-pro": "gemini-2.5-pro",
