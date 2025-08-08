@@ -42,6 +42,7 @@ class DirectPromptingAgent(EvolveAgent):
     '''
     def __init__(self, llm_agent: BaseLLM, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = "first"):
         super().__init__(llm_agent, judge_type, judge_model_backbone, reward_type)
+        self.evolve_strategy = "direct_prompting"
     
     def explore(self, question: str, init_response: str, original_score: float, original_explanation: str, budget: int = 5, pool_size: int = 2, baseline_response: str = None, **kwargs):
         '''
