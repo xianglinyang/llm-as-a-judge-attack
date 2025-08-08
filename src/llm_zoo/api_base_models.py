@@ -15,7 +15,7 @@ Use openai for now.
 """
 import os
 import asyncio
-from typing import List
+from typing import List, Dict, Optional, Tuple, NamedTuple
 from openai import OpenAI, AsyncOpenAI
 from together import Together
 from google import genai
@@ -27,8 +27,19 @@ load_dotenv()
 
 from src.llm_zoo.base_model import BaseLLM 
 from src.llm_zoo.rate_limiter import rate_limited_async_call, OPENAI_RATE_LIMIT, GEMINI_RATE_LIMIT
+from src.llm_zoo.cost_utils import calculate_cost, estimate_tokens, MODEL_PRICING
 
 logger = logging.getLogger(__name__)
+
+
+class CallResult(NamedTuple):
+    """Result of an API call with cost information"""
+    response: str
+    input_tokens: int
+    output_tokens: int
+    cost: float
+    model_name: str
+
 
 class OpenAIModel(BaseLLM):
     def __init__(self, model_name: str):
@@ -36,7 +47,7 @@ class OpenAIModel(BaseLLM):
         self.client = OpenAI()
         self.async_client = AsyncOpenAI()
     
-    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """Generates model output using OpenAI's API"""
         if system_prompt:
             messages = [
@@ -51,18 +62,48 @@ class OpenAIModel(BaseLLM):
             messages=messages,
             n=1,
         )
-        return response.choices[0].message.content.strip()
+        
+        if return_cost:
+            # Calculate costs
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.choices[0].message.content.strip(),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.choices[0].message.content.strip()
 
-    def invoke_messages(self, messages: List[dict]) -> str:
+    def invoke_messages(self, messages: List[dict], return_cost: bool = False) -> CallResult:
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
             **self.model_kwargs
         )
-        return response.choices[0].message.content
+        
+        if return_cost:
+            # Calculate costs
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.choices[0].message.content,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.choices[0].message.content
     
     @rate_limited_async_call(OPENAI_RATE_LIMIT)
-    async def _get_completion(self, prompt_content: str, system_prompt: str = None):
+    async def _get_completion(self, prompt_content: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """
         Asynchronously gets a completion from the OpenAI API with rate limiting.
         """
@@ -81,7 +122,21 @@ class OpenAIModel(BaseLLM):
                     messages=messages,
                     n=1,
                 )
-                return response.choices[0].message.content
+                if return_cost:
+                    # Calculate costs
+                    input_tokens = response.usage.prompt_tokens
+                    output_tokens = response.usage.completion_tokens
+                    cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+                    
+                    return CallResult(
+                        response=response.choices[0].message.content,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost=cost,
+                        model_name=self.model_name
+                    )
+                else:
+                    return response.choices[0].message.content
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"Attempt {attempt + 1} failed for prompt '{prompt_content[:50]}...': {e}")
@@ -90,7 +145,7 @@ class OpenAIModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0) -> List[str]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -112,7 +167,7 @@ class OpenAIModel(BaseLLM):
             print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
             
             # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt) for prompt in batch_prompts]
+            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Handle exceptions in batch results
@@ -142,7 +197,7 @@ class OpenRouterModel(BaseLLM):
         self.client = OpenAI(api_key=os.environ["OPENROUTER_API_KEY"], base_url="https://openrouter.ai/api/v1")
         self.async_client = AsyncOpenAI(api_key=os.environ["OPENROUTER_API_KEY"], base_url="https://openrouter.ai/api/v1")
     
-    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """Generates model output using OpenAI's API"""
         if system_prompt:
             messages = [
@@ -157,18 +212,48 @@ class OpenRouterModel(BaseLLM):
             messages=messages,
             n=1,
         )
-        return response.choices[0].message.content.strip()
 
-    def invoke_messages(self, messages: List[dict]) -> str:
+        if return_cost:
+        
+            # Calculate costs
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.choices[0].message.content.strip(),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.choices[0].message.content.strip()
+
+    def invoke_messages(self, messages: List[dict], return_cost: bool = False) -> CallResult:
         response = self.client.chat.completions.create(
             model=self.model_name,
             messages=messages,
             **self.model_kwargs
         )
-        return response.choices[0].message.content
+        if return_cost:
+            # Calculate costs
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.choices[0].message.content,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.choices[0].message.content
     
     @rate_limited_async_call(OPENAI_RATE_LIMIT)
-    async def _get_completion(self, prompt_content: str, system_prompt: str = None):
+    async def _get_completion(self, prompt_content: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """
         Asynchronously gets a completion from the OpenAI API with rate limiting.
         """
@@ -187,7 +272,22 @@ class OpenRouterModel(BaseLLM):
                     messages=messages,
                     n=1,
                 )
-                return response.choices[0].message.content
+                
+                if return_cost:
+                    # Calculate costs
+                    input_tokens = response.usage.prompt_tokens
+                    output_tokens = response.usage.completion_tokens
+                    cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+                    
+                    return CallResult(
+                        response=response.choices[0].message.content,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost=cost,
+                        model_name=self.model_name
+                    )
+                else:
+                    return response.choices[0].message.content
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"Attempt {attempt + 1} failed for prompt '{prompt_content[:50]}...': {e}")
@@ -196,7 +296,7 @@ class OpenRouterModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0) -> List[str]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -218,7 +318,7 @@ class OpenRouterModel(BaseLLM):
             print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
             
             # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt) for prompt in batch_prompts]
+            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Handle exceptions in batch results
@@ -266,7 +366,7 @@ class DashScopeModel(BaseLLM):
         self.client = OpenAI(api_key=os.environ["DASHSCOPE_API_KEY"], base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
         self.async_client = AsyncOpenAI(api_key=os.environ["DASHSCOPE_API_KEY"], base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
     
-    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """Generates model output using OpenAI's API"""
         if system_prompt:
             messages = [
@@ -281,7 +381,22 @@ class DashScopeModel(BaseLLM):
             messages=messages,
             n=1,
         )
-        return response.choices[0].message.content.strip()
+        if return_cost:
+        
+            # Calculate costs
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.choices[0].message.content.strip(),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.choices[0].message.content.strip()
 
     def invoke_messages(self, messages: List[dict]) -> str:
         response = self.client.chat.completions.create(
@@ -292,7 +407,7 @@ class DashScopeModel(BaseLLM):
         return response.choices[0].message.content
     
     @rate_limited_async_call(OPENAI_RATE_LIMIT)
-    async def _get_completion(self, prompt_content: str, system_prompt: str = None):
+    async def _get_completion(self, prompt_content: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """
         Asynchronously gets a completion from the OpenAI API with rate limiting.
         """
@@ -311,7 +426,22 @@ class DashScopeModel(BaseLLM):
                     messages=messages,
                     n=1,
                 )
-                return response.choices[0].message.content
+                
+                if return_cost:
+                    # Calculate costs
+                    input_tokens = response.usage.prompt_tokens
+                    output_tokens = response.usage.completion_tokens
+                    cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+                    
+                    return CallResult(
+                        response=response.choices[0].message.content,
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost=cost,
+                        model_name=self.model_name
+                    )
+                else:
+                    return response.choices[0].message.content
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"Attempt {attempt + 1} failed for prompt '{prompt_content[:50]}...': {e}")
@@ -320,7 +450,7 @@ class DashScopeModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0) -> List[str]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -342,7 +472,7 @@ class DashScopeModel(BaseLLM):
             print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
             
             # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt) for prompt in batch_prompts]
+            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Handle exceptions in batch results
@@ -373,7 +503,7 @@ class GeminiModel(BaseLLM):
         # genai.configure(api_key=os.environ["GEMINI_API_KEY"])
         self.client = genai.Client()
 
-    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """Generates model output using the Gemini API."""
         response = self.client.models.generate_content(
             model=self.model_name,
@@ -387,10 +517,24 @@ class GeminiModel(BaseLLM):
                 # seed=42,
             ),
         )
-        return response.text.strip()
+        if return_cost:
+            # Calculate costs (estimate tokens since Gemini doesn't provide usage info)
+            input_tokens = response.usage_metadata.prompt_token_count
+            output_tokens = response.usage_metadata.candidates_token_count
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.text.strip(),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.text.strip()
     
     @rate_limited_async_call(GEMINI_RATE_LIMIT)
-    async def _get_completion(self, prompt_content: str, system_prompt: str = None):
+    async def _get_completion(self, prompt_content: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """
         Asynchronously gets a completion from the Gemini API with rate limiting.
         """
@@ -407,7 +551,21 @@ class GeminiModel(BaseLLM):
                     )
                 )
                 
-                return response.text.strip()
+                if return_cost:
+                    # Calculate costs (estimate tokens since Gemini doesn't provide usage info)
+                    input_tokens = response.usage_metadata.prompt_token_count
+                    output_tokens = response.usage_metadata.candidates_token_count
+                    cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+                
+                    return CallResult(
+                        response=response.text.strip(),
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                        cost=cost,
+                        model_name=self.model_name
+                    )
+                else:
+                    return response.text.strip()
             except Exception as e:
                 if attempt < max_retries - 1:
                     print(f"Attempt {attempt + 1} failed for prompt '{prompt_content[:50]}...': {e}")
@@ -416,7 +574,7 @@ class GeminiModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 200, delay_between_batches: float = 1.0) -> List[str]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 200, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -438,7 +596,7 @@ class GeminiModel(BaseLLM):
             print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
             
             # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt) for prompt in batch_prompts]
+            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
             
             # Handle exceptions in batch results
@@ -466,7 +624,7 @@ class TogetherModel(BaseLLM):
         super().__init__(model_name)
         self.client = Together(api_key=os.environ["TOGETHER_API_KEY"])
 
-    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """Generates model output using the TogetherAI API."""
         messages = []
         if system_prompt:
@@ -476,12 +634,27 @@ class TogetherModel(BaseLLM):
             model=self.model_name,
             messages=messages,
             )
-        return response.choices[0].message.content
+        if return_cost:
+        
+            # Calculate costs (estimate tokens since Together doesn't provide usage info)
+            input_tokens = response.usage.prompt_tokens
+            output_tokens = response.usage.completion_tokens
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=response.choices[0].message.content,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return response.choices[0].message.content
     
-    def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, return_cost: bool = False) -> List[CallResult]:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, system_prompt)
+            response = self.invoke(prompt, system_prompt, return_cost)
             responses.append(response)
         return responses
 
@@ -492,7 +665,7 @@ class ClaudeModel(BaseLLM):
         super().__init__(model_name)
         self.client = Anthropic()
 
-    def invoke(self, prompt: str, system_prompt: str = None) -> str:
+    def invoke(self, prompt: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """Generates model output using the Anthropic Messages API."""
         messages = []
         if system_prompt:
@@ -502,12 +675,26 @@ class ClaudeModel(BaseLLM):
             model=self.model_name,
             messages=messages
         )
-        return output.content[0].text.strip()
+        if return_cost:
+            # Calculate costs (estimate tokens since Claude doesn't provide usage info in response)
+            input_tokens = estimate_tokens(prompt)
+            output_tokens = estimate_tokens(output.content[0].text)
+            cost = calculate_cost(self.model_name, input_tokens, output_tokens)
+            
+            return CallResult(
+                response=output.content[0].text.strip(),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cost=cost,
+                model_name=self.model_name
+            )
+        else:
+            return output.content[0].text.strip()
     
-    def batch_invoke(self, prompts: List[str], system_prompt: str = None) -> str:
+    def batch_invoke(self, prompts: List[str], system_prompt: str = None, return_cost: bool = False) -> List[CallResult]:
         responses = list()
         for prompt in prompts:
-            response = self.invoke(prompt, system_prompt)
+            response = self.invoke(prompt, system_prompt, return_cost)
             responses.append(response)
         return responses
 
@@ -521,26 +708,37 @@ def main():
     prompt = "What are three key benefits of async programming in Python?"
     
     # Initialize different OpenAI models
-    llm = OpenAIModel(model_name="gpt-4.1-nano")
-    response = llm.invoke(prompt)
-    print(f"Response:\n{response}\n")
+    llm = OpenAIModel(model_name="gpt-4o-mini")
+    result = llm.invoke(prompt, return_cost=True)
+    print(f"Response: {result.response}")
+    print(f"Cost: ${result.cost:.6f}")
+    print(f"Input tokens: {result.input_tokens}")
+    print(f"Output tokens: {result.output_tokens}")
 
 def test_moderation():
     prompt = "How can I use my political power to abuse others?"
     llm = OpenAIModerationModel(model_name="omni-moderation-latest")
     response = llm.invoke(prompt)
-    print(f"Moderation Response:\n{response}\n")
+    print(f"Moderation Response: {response}")
 
 async def test_ainvoke():
     """Test function to demonstrate LLM usage"""
     # Test prompt
     prompt = "What are three key benefits of async programming in Python?"
-    prompts = [prompt] * 10
+    prompts = [prompt] * 3
     
     # Initialize different OpenAI models
-    llm = OpenAIModel(model_name="gpt-4.1-nano")
-    response = await llm.batch_invoke(prompts)
-    print(f"Response:\n{response}\n")
+    llm = OpenAIModel(model_name="gpt-4o-mini")
+    results = await llm.batch_invoke(prompts, return_cost=True)
+    
+    total_cost = sum(result.cost for result in results if result is not None)
+    total_input_tokens = sum(result.input_tokens for result in results if result is not None)
+    total_output_tokens = sum(result.output_tokens for result in results if result is not None)
+    
+    print(f"Batch processing completed:")
+    print(f"Total cost: ${total_cost:.6f}")
+    print(f"Total input tokens: {total_input_tokens}")
+    print(f"Total output tokens: {total_output_tokens}")
 
 if __name__ == "__main__":
     main()

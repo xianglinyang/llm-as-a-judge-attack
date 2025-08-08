@@ -5,7 +5,7 @@ from src.llm_zoo.base_model import BaseLLM
 from src.llm_zoo.api_base_models import OpenAIModel, OpenRouterModel, GeminiModel, ClaudeModel, DashScopeModel
 from src.llm_zoo.code_base_models import VLLMModel, HuggingFaceModel
 
-from src.llm_zoo.imp2name import openai_models, gemini_models, claude_models, openrouter_models, dashscope_models
+from src.llm_zoo.api_zoo import openai_models, gemini_models, claude_models, openrouter_models, dashscope_models
 
 __all__ = ['load_model', 'OpenAIModel', 'OpenRouterModel', 'GeminiModel', 'ClaudeModel', 'DashScopeModel', 'VLLMModel', 'HuggingFaceModel', "BaseLLM"]
 
