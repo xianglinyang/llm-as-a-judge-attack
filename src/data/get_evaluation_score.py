@@ -17,7 +17,7 @@ import argparse
 from src.logging_utils import setup_logging
 from src.llm_evaluator import load_judge_model, get_judge_type
 from src.data.data_utils import load_dataset
-from src.llm_zoo.imp2name import get_model_name, is_valid_model
+from src.llm_zoo.api_zoo import get_model_name, is_valid_model
 
 
 logger = logging.getLogger(__name__)

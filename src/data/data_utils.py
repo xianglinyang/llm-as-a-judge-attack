@@ -2,7 +2,6 @@ import os
 import json
 import logging
 
-from src.llm_zoo.imp2name import get_model_name
 
 logger = logging.getLogger(__name__)
 

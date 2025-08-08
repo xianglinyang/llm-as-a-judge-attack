@@ -17,7 +17,7 @@ import logging
 from src.logging_utils import setup_logging
 from src.llm_zoo import load_model
 from src.data.data_utils import load_metadata
-from src.llm_zoo.imp2name import get_model_name, is_valid_model
+from src.llm_zoo.api_zoo import get_model_name, is_valid_model
 logger = logging.getLogger(__name__)
 
 async def get_response_from_model(save_dir, dataset_name, response_model_implementation_name, use_vllm=False, **kwargs):
@@ -49,10 +49,38 @@ async def get_response_from_model(save_dir, dataset_name, response_model_impleme
 
     response_model = load_model(response_model_implementation_name, use_vllm=use_vllm, **kwargs)
 
+    # Track costs
+    total_cost = 0.0
+    total_input_tokens = 0
+    total_output_tokens = 0
+
     if use_vllm:
+        # For vLLM, we don't have cost tracking yet, so we'll estimate
         responses = response_model.batch_invoke(questions)
+        logger.info(f"Generated {len(responses)} responses using vLLM")
+        logger.info("Note: Cost tracking not available for vLLM models")
     else:
-        responses = await response_model.batch_invoke(questions)
+        # For API models, we get CallResult objects
+        results = await response_model.batch_invoke(questions)
+        
+        # Extract responses and calculate costs
+        responses = []
+        for i, result in enumerate(results):
+            if result is not None:
+                responses.append(result.response)
+                total_cost += result.cost
+                total_input_tokens += result.input_tokens
+                total_output_tokens += result.output_tokens
+            else:
+                responses.append("")  # Handle failed calls
+                logger.warning(f"Call {i} failed")
+        
+        # Log cost information
+        logger.info(f"Cost Summary for {dataset_name}:")
+        logger.info(f"  Total cost: ${total_cost:.6f}")
+        logger.info(f"  Total input tokens: {total_input_tokens:,}")
+        logger.info(f"  Total output tokens: {total_output_tokens:,}")
+        logger.info(f"  Average cost per call: ${total_cost/len(results):.6f}")
     
     new_dataset = []
     for item, response in zip(metadata, responses):
@@ -61,6 +89,7 @@ async def get_response_from_model(save_dir, dataset_name, response_model_impleme
     
     with open(save_path, "w") as f:
         json.dump(new_dataset, f, indent=4)
+    
     return new_dataset
 
 async def main(args):
