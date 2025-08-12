@@ -342,20 +342,20 @@ class BiasModification:
     def __init__(self, helper_model: BaseLLM):
         self.helper_model = helper_model
     
-    def principle_guided_mutation(self, answer: str, strategy: str) -> str:
+    def principle_guided_mutation(self, answer: str, strategy: str, return_cost: bool = False) -> str:
         assert strategy in Bias_types, f"Strategy {strategy} is not in the list of bias types"
         strategy_prompt = Bias_type_to_prompt[strategy]
         strategy_prompt = strategy_prompt.format(original_answer=answer)
         
-        response = self.helper_model.invoke(strategy_prompt)
+        response = self.helper_model.invoke(strategy_prompt, return_cost=return_cost)
         return response
     
-    async def batch_principle_guided_mutation(self, answer_list: list[str], strategy: list[str]) -> list[str]:
+    async def batch_principle_guided_mutation(self, answer_list: list[str], strategy: list[str], return_cost: bool = False) -> list[str]:
         assert len(answer_list) == len(strategy), "The number of answers and strategies must be the same"
         strategy_prompt_list = [Bias_type_to_prompt[strategy] for strategy in strategy]
         strategy_prompt_instance_list = [strategy_prompt.format(original_answer=answer) for strategy_prompt, answer in zip(strategy_prompt_list, answer_list)]
 
-        responses = await self.helper_model.batch_invoke(strategy_prompt_instance_list)
+        responses = await self.helper_model.batch_invoke(strategy_prompt_instance_list, return_cost=return_cost)
         return responses
     
 

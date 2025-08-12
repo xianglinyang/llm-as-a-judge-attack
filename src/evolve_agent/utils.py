@@ -1,4 +1,3 @@
-from tqdm import tqdm
 import logging
 import numpy as np
 import os
@@ -8,7 +7,7 @@ import random
 
 from src.data.data_utils import load_dataset_for_exploration
 from src.llm_evaluator import JudgeType, load_judge_model
-from src.llm_zoo.imp2name import get_model_name
+from src.llm_zoo.api_zoo import get_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +95,7 @@ def exclude_perfect_response(judge_type, question_list, init_response_list, cate
                     "final_explanation": original_explanation,
                     "final_response": response,
                     "exploration_length": 1,
-                    "skip": True,
+                    "skip": 1,
                 })
                 continue
             elif original_score == -1:
@@ -115,7 +114,7 @@ def exclude_perfect_response(judge_type, question_list, init_response_list, cate
                     "final_explanation": original_explanation,
                     "final_response": response,
                     "exploration_length": 1,
-                    "skip": True,
+                    "skip": 1,
                 })
                 continue
             elif original_score == -1:
@@ -135,7 +134,7 @@ def exclude_perfect_response(judge_type, question_list, init_response_list, cate
                     "final_score": original_score,
                     "final_response": response,
                     "exploration_length": 1,
-                    "skip": True,
+                    "skip": 1,
                 })
             else:
                 selected_idxs.append(idx)
@@ -168,7 +167,7 @@ def extract_result_from_trajectories(question_list, init_response_list, category
             "final_response": final_response,
             "baseline_response": baseline_response,
             "exploration_length": exploration_length,
-            "skip": False,
+            "skip": 0,
         }
         
         test_results.append(result.copy())
@@ -186,19 +185,21 @@ def get_result_analysis(test_results):
         logger.info(f"Number of results: {len(category_results)}")
 
         # Pointwise evaluation analysis
-        up_num = len([result for result in category_results if result["original_score"] < result["final_score"] and not result["skip"]])
-        down_num = len([result for result in category_results if result["original_score"] > result["final_score"] and not result["skip"]])
-        tie_num = len([result for result in category_results if result["original_score"] == result["final_score"] and not result["skip"]])
-        skip_num = len([result for result in category_results if result["skip"]])
-        avg_exploration_length = np.mean([result["exploration_length"] for result in category_results if not result["skip"]])
-        avg_score_before = np.mean([result["original_score"] for result in category_results if not result["skip"]])
-        avg_score_after = np.mean([result["final_score"] for result in category_results if not result["skip"]])
-        avg_improvement = np.mean([result["final_score"] - result["original_score"] for result in category_results if not result["skip"]])
-        
+        up_num = len([1 for result in category_results if (not result["skip"]) and result["original_score"] < result["final_score"]])
+        down_num = len([1 for result in category_results if (not result["skip"]) and result["original_score"] > result["final_score"]])
+        tie_num = len([1 for result in category_results if (not result["skip"]) and result["original_score"] == result["final_score"]])
+        skip_num = len([1 for result in category_results if result["skip"]])
+        all_num = len(category_results)
+        avg_exploration_length = np.mean([result["exploration_length"] for result in category_results if (not result["skip"])])
+        avg_score_before = np.mean([result["original_score"] for result in category_results if (not result["skip"])])
+        avg_score_after = np.mean([result["final_score"] for result in category_results if (not result["skip"])])
+        avg_improvement = np.mean([result["final_score"] - result["original_score"] for result in category_results if (not result["skip"])])
+
         logger.info(f"Number of up results: {up_num}")
         logger.info(f"Number of down results: {down_num}")
         logger.info(f"Number of tie results: {tie_num}")
         logger.info(f"Number of skip results: {skip_num}")
+        logger.info(f"Number of all results: {all_num}")
         logger.info(f"Average exploration length: {avg_exploration_length}")
         logger.info(f"Average improvement: {avg_improvement}")
         logger.info(f"Average score before: {avg_score_before}, average score after: {avg_score_after}")
@@ -209,6 +210,7 @@ def get_result_analysis(test_results):
             "down_num": down_num,
             "tie_num": tie_num,
             "skip_num": skip_num,
+            "all_num": all_num,
             "exploration_length": avg_exploration_length,
             "avg_score_before": avg_score_before,
             "avg_score_after": avg_score_after,
@@ -247,17 +249,14 @@ def save_trajectories(trajectories, save_path, save_name):
 def sample_and_filter_data(selected_idxs, eval_num, question_list, init_response_list, 
                               original_score_list, original_explanation_list, category_list, 
                               baseline_response_list):
-    
-    selected_idxs_len = len(selected_idxs)
-    if eval_num >= selected_idxs_len:
-        eval_num = selected_idxs_len
+    available_num = len(selected_idxs)
+    if eval_num >= available_num:
+        eval_num = available_num
         logger.info(f"Eval num exceed the number of selected idxs, use all selected idxs.")
         logger.info(f"Eval num: {eval_num}")
-        return eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list
     else:
-        eval_num = eval_num
         selected_idxs = random.sample(selected_idxs, eval_num)
-        logger.info(f"Randomly sample {eval_num} questions from {selected_idxs_len} questions")
+        logger.info(f"Randomly sample {eval_num} questions from {available_num} questions")
 
     # selected samples
     question_list = [question_list[idx] for idx in selected_idxs]
@@ -268,3 +267,21 @@ def sample_and_filter_data(selected_idxs, eval_num, question_list, init_response
     baseline_response_list = [baseline_response_list[idx] for idx in selected_idxs]
 
     return eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list
+
+
+if __name__ == "__main__":
+    # test the function
+    test_results = [
+        {"category": "category1", "original_score": 8, "final_score": 9, "skip": 1, "exploration_length": 1},
+        {"category": "category1", "original_score": 8, "final_score": 7, "skip": 1, "exploration_length": 1},
+        {"category": "category1", "original_score": 8, "final_score": 8, "skip": 0, "exploration_length": 1},
+        {"category": "category1", "original_score": 8, "final_score": 9, "skip": 0, "exploration_length": 1},
+        {"category": "category1", "original_score": 8, "final_score": 7, "skip": 0, "exploration_length": 1},
+        {"category": "category2", "original_score": 8, "final_score": 9, "skip": 1, "exploration_length": 1},
+        {"category": "category2", "original_score": 8, "final_score": 7, "skip": 1, "exploration_length": 1},
+        {"category": "category2", "original_score": 8, "final_score": 8, "skip": 0, "exploration_length": 1},
+        {"category": "category2", "original_score": 8, "final_score": 9, "skip": 0, "exploration_length": 1},
+        {"category": "category2", "original_score": 8, "final_score": 7, "skip": 0, "exploration_length": 1},
+    ]
+    analysis = get_result_analysis(test_results)
+    print(analysis)

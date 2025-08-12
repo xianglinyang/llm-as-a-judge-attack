@@ -7,10 +7,14 @@ Point-wise scoring:
 from enum import Enum
 from abc import abstractmethod, ABC
 import re
+import logging
+import time
 
 from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT, PAPER_OVERALL_RUBRIC
 from src.llm_zoo import load_model
 from src.utils import str2json
+
+logger = logging.getLogger(__name__)
 
 # ------------------------------------------------------------
 # Judge Type
@@ -66,7 +70,11 @@ class PointwiseJudgeModel(JudgeModelABC):
     def get_score(self, input_q, response) -> tuple[int, str]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompt = POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response)
-        response = self.model.invoke(formatted_prompt)
+        call_result = self.model.invoke(formatted_prompt, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         try:
             json_response = str2json(response)
             score = int(json_response["score"])
@@ -75,16 +83,31 @@ class PointwiseJudgeModel(JudgeModelABC):
             score = 0
             feedback = "Error: Failed to parse the response as a JSON object."
             print(f"Error: Failed to parse the response as a JSON object. {response}")
+        
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, feedback
     
     async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
-        responses = await self.model.batch_invoke(formatted_prompts)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
         scores = []
         explanations = []
-        for response in responses:
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
             try:
+                response = call_result.response
+                cost = call_result.cost
+                input_tokens = call_result.input_tokens
+                output_tokens = call_result.output_tokens
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
                 json_response = str2json(response)
                 score = int(json_response["score"])
                 explanation = json_response["feedback"]
@@ -93,6 +116,8 @@ class PointwiseJudgeModel(JudgeModelABC):
             except:
                 scores.append(0)
                 explanations.append("Error: Failed to parse the response as a JSON object.")
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return scores, explanations
 
 def get_pairwise_score(response):
@@ -116,7 +141,11 @@ class PairwiseJudgeModel(JudgeModelABC):
     def get_score(self, input_q, response1, response2) -> tuple[int, str]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompt = PAIRWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2)
-        response = self.model.invoke(formatted_prompt)
+        call_result = self.model.invoke(formatted_prompt, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         try:
             json_response = str2json(response)
             better_model = json_response["better_model"]
@@ -125,7 +154,7 @@ class PairwiseJudgeModel(JudgeModelABC):
             better_model = None
             feedback = "Error: Failed to parse the response as a JSON object."
             print(f"Error: Failed to parse the response as a JSON object. {response}")
-
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         score = get_pairwise_score(better_model)
         return score, feedback
         
@@ -133,11 +162,24 @@ class PairwiseJudgeModel(JudgeModelABC):
     async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [PAIRWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = await self.model.batch_invoke(formatted_prompts)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
         better_models = []
         feedbacks = []
-        for response in responses:
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
             try:
+                response = call_result.response
+                cost = call_result.cost
+                input_tokens = call_result.input_tokens
+                output_tokens = call_result.output_tokens
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
                 json_response = str2json(response)
                 better_model = json_response["better_model"]
                 feedback = json_response["feedback"]
@@ -147,6 +189,8 @@ class PairwiseJudgeModel(JudgeModelABC):
             except:
                 better_models.append(-2)
                 feedbacks.append("Error: Failed to parse the response as a JSON object.")
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return better_models, feedbacks
 
 class FineGrainedPairwiseJudgeModel(JudgeModelABC):
@@ -156,7 +200,11 @@ class FineGrainedPairwiseJudgeModel(JudgeModelABC):
     def get_score(self, input_q, response1, response2) -> tuple[int, str]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompt = PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2)
-        response = self.model.invoke(formatted_prompt)
+        call_result = self.model.invoke(formatted_prompt, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         try:
             json_response = str2json(response)
             better_model = json_response["better_model"]
@@ -168,17 +216,31 @@ class FineGrainedPairwiseJudgeModel(JudgeModelABC):
             print(f"Error: Failed to parse the response as a JSON object. {response}")
 
         score = get_pairwise_score(better_model)*score
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, feedback
         
     
     async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT_A=response1, OUTPUT_B=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = await self.model.batch_invoke(formatted_prompts)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
         better_models = []
         feedbacks = []
-        for response in responses:
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
             try:
+                response = call_result.response
+                cost = call_result.cost
+                input_tokens = call_result.input_tokens
+                output_tokens = call_result.output_tokens
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
                 json_response = str2json(response)
                 better_model = json_response["better_model"]
                 feedback = json_response["feedback"]
@@ -189,6 +251,8 @@ class FineGrainedPairwiseJudgeModel(JudgeModelABC):
             except:
                 better_models.append(-2)
                 feedbacks.append("Error: Failed to parse the response as a JSON object.")
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return better_models, feedbacks
     
 def get_alpaca_eval_score(response):
@@ -206,19 +270,39 @@ class AlpacaEvalModel(JudgeModelABC):
     def get_score(self, input_q, response1, response2) -> tuple[int, str]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompt = ALPACA_EVAL_PROMPT.format(instruction=input_q, output_1=response1, output_2=response2)
-        response = self.model.invoke(formatted_prompt, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT)
+        call_result = self.model.invoke(formatted_prompt, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         score, feedback = get_alpaca_eval_score(response)
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, feedback
 
     async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [ALPACA_EVAL_PROMPT.format(instruction=input_q, output_1=response1, output_2=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = await self.model.batch_invoke(formatted_prompts, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=ALPACA_EVAL_SYSTEM_PROMPT, return_cost=True)
+        end_time = time.time()
         scores = []
         feedbacks = []
-        for response in responses:
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            response = call_result.response
+            cost = call_result.cost
+            input_tokens = call_result.input_tokens
+            output_tokens = call_result.output_tokens
+            total_cost += cost
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
             score, feedback = get_alpaca_eval_score(response)
             scores.append(score)
             feedbacks.append(feedback)
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return scores, feedbacks
     
 def get_arena_hard_score(judge_output):
@@ -251,19 +335,39 @@ class ArenaHardAutoModel(JudgeModelABC):
         5. Assistant B is significantly better: [[B>>A]]
         '''
         formatted_prompt = ARENA_HARD_AUTO_PROMPT.format(question=input_q, answer_a=response1, answer_b=response2)
-        response = self.model.invoke(formatted_prompt, system_prompt=ARENA_HARD_AUTO_SYSTEM_PROMPT)
+        call_result = self.model.invoke(formatted_prompt, system_prompt=ARENA_HARD_AUTO_SYSTEM_PROMPT, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         score, feedback = get_arena_hard_score(response)
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, feedback
     
     async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [ARENA_HARD_AUTO_PROMPT.format(input_q, response1, response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
-        responses = await self.model.batch_invoke(formatted_prompts)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
         scores = []
         feedbacks = []
-        for response in responses:
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            response = call_result.response
+            cost = call_result.cost
+            input_tokens = call_result.input_tokens
+            output_tokens = call_result.output_tokens
+            total_cost += cost
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
             score, feedback = get_arena_hard_score(response)
             scores.append(score)
             feedbacks.append(feedback)
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return scores, feedbacks
 
 def get_mt_bench_score(judge_output):
@@ -294,17 +398,39 @@ class MTBenchModel(JudgeModelABC):
 
     def get_score(self, input_q, response) -> tuple[int, str]:
         formatted_prompt = MT_BENCH_PROMPT.format(question=input_q, answer=response)
-        response = self.model.invoke(formatted_prompt, system_prompt=MT_BENCH_SYSTEM_PROMPT)
+        call_result = self.model.invoke(formatted_prompt, system_prompt=MT_BENCH_SYSTEM_PROMPT, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         score = get_mt_bench_score(response)
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, response
     
     async def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [MT_BENCH_PROMPT.format(question=input_q, answer=response) for input_q, response in zip(q_list, response_list)]
-        responses = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_SYSTEM_PROMPT)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_SYSTEM_PROMPT, return_cost=True)
+        end_time = time.time()
         scores = []
-        for response in responses:
+        responses = []
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            response = call_result.response
+            cost = call_result.cost
+            input_tokens = call_result.input_tokens
+            output_tokens = call_result.output_tokens
+            total_cost += cost
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
             outcome = get_mt_bench_score(response)
             scores.append(outcome)
+            responses.append(response)
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return scores, responses
 
 def get_mlrbench_score(judge_output):
@@ -352,19 +478,39 @@ class MLRBenchModel(JudgeModelABC):
 
     def get_score(self, input_q, response) -> tuple[int, str]:
         formatted_prompt = PAPER_OVERALL_RUBRIC.format(task=input_q, paper=response)
-        response = self.model.invoke(formatted_prompt)
+        call_result = self.model.invoke(formatted_prompt, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
         score, explanation = get_mlrbench_score(response)
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, explanation
     
     async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [PAPER_OVERALL_RUBRIC.format(task=input_q, paper=response) for input_q, response in zip(q_list, response_list)]
-        responses = await self.model.batch_invoke(formatted_prompts)
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
         scores = []
         explanations = []
-        for response in responses:
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            response = call_result.response
+            cost = call_result.cost
+            input_tokens = call_result.input_tokens
+            output_tokens = call_result.output_tokens
+            total_cost += cost
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
             score, explanation = get_mlrbench_score(response)
             scores.append(score)
             explanations.append(explanation)
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
         return scores, explanations
 
 def load_judge_model(judge_type, judge_model_backbone):

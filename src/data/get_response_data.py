@@ -61,7 +61,7 @@ async def get_response_from_model(save_dir, dataset_name, response_model_impleme
         logger.info("Note: Cost tracking not available for vLLM models")
     else:
         # For API models, we get CallResult objects
-        results = await response_model.batch_invoke(questions)
+        results = await response_model.batch_invoke(questions, return_cost=True)
         
         # Extract responses and calculate costs
         responses = []
