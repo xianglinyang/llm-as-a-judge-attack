@@ -42,6 +42,10 @@ claude_models = [
 
 openrouter_models = [
     # openai
+    "openai/gpt-5-mini",
+    "openai/gpt-5-nano",
+    "openai/gpt-5-chat-latest",
+    "openai/gpt-5",
     "openai/o3-mini",
     "openai/o3-mini-high",
     "openai/o3",
@@ -155,6 +159,10 @@ implementation_to_name = {
     "claude-3-7-sonnet-20250219": "claude-3-7-sonnet-20250219",
 
     # OpenRouter OpenAI models
+    "openai/gpt-5-mini": "gpt-5-mini",
+    "openai/gpt-5-nano": "gpt-5-nano",
+    "openai/gpt-5-chat-latest": "gpt-5-chat-latest",
+    "openai/gpt-5": "gpt-5",
     "openai/o3-mini": "o3-mini",
     "openai/o3-mini-high": "o3-mini-high",
     "openai/o3": "o3",

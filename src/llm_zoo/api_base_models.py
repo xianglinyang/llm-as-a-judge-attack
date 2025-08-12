@@ -15,7 +15,7 @@ Use openai for now.
 """
 import os
 import asyncio
-from typing import List, Dict, Optional, Tuple, NamedTuple
+from typing import List
 from openai import OpenAI, AsyncOpenAI
 from together import Together
 from google import genai
@@ -26,19 +26,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from src.llm_zoo.base_model import BaseLLM 
-from src.llm_zoo.rate_limiter import rate_limited_async_call, OPENAI_RATE_LIMIT, GEMINI_RATE_LIMIT
-from src.llm_zoo.cost_utils import calculate_cost, estimate_tokens, MODEL_PRICING
+from src.llm_zoo.rate_limiter import rate_limited_async_call, OPENAI_RATE_LIMIT, GEMINI_RATE_LIMIT, OPENROUTER_RATE_LIMIT
+from src.llm_zoo.cost_utils import calculate_cost, estimate_tokens, MODEL_PRICING, CallResult
 
 logger = logging.getLogger(__name__)
-
-
-class CallResult(NamedTuple):
-    """Result of an API call with cost information"""
-    response: str
-    input_tokens: int
-    output_tokens: int
-    cost: float
-    model_name: str
 
 
 class OpenAIModel(BaseLLM):
@@ -145,7 +136,7 @@ class OpenAIModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -156,37 +147,18 @@ class OpenAIModel(BaseLLM):
             delay_between_batches: Delay in seconds between batches (default: 1.0)
         """
         all_results = []
-        total_batches = (len(prompts) + batch_size - 1) // batch_size
+
+        # Process current batch with limited concurrency
+        tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        print(f"Processing {len(prompts)} prompts in {total_batches} batches of size {batch_size}")
+        # Handle exceptions in batch results
+        for j, result in enumerate(results):
+            if isinstance(result, Exception):
+                all_results.append(None)
+            else:
+                all_results.append(result)
         
-        for i in range(0, len(prompts), batch_size):
-            batch_prompts = prompts[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            
-            print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
-            
-            # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Handle exceptions in batch results
-            processed_results = []
-            for j, result in enumerate(batch_results):
-                if isinstance(result, Exception):
-                    print(f"Exception in batch {batch_num}, prompt {j}: {result}")
-                    processed_results.append(None)
-                else:
-                    processed_results.append(result)
-            
-            all_results.extend(processed_results)
-            
-            # Add delay between batches (except for the last batch)
-            if i + batch_size < len(prompts):
-                print(f"Waiting {delay_between_batches} seconds before next batch...")
-                await asyncio.sleep(delay_between_batches)
-        
-        print(f"Completed processing all {len(prompts)} prompts")
         return all_results
 
 
@@ -252,7 +224,7 @@ class OpenRouterModel(BaseLLM):
         else:
             return response.choices[0].message.content
     
-    @rate_limited_async_call(OPENAI_RATE_LIMIT)
+    @rate_limited_async_call(OPENROUTER_RATE_LIMIT)
     async def _get_completion(self, prompt_content: str, system_prompt: str = None, return_cost: bool = False) -> CallResult:
         """
         Asynchronously gets a completion from the OpenAI API with rate limiting.
@@ -296,7 +268,7 @@ class OpenRouterModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -307,37 +279,18 @@ class OpenRouterModel(BaseLLM):
             delay_between_batches: Delay in seconds between batches (default: 1.0)
         """
         all_results = []
-        total_batches = (len(prompts) + batch_size - 1) // batch_size
         
-        print(f"Processing {len(prompts)} prompts in {total_batches} batches of size {batch_size}")
+        # Process current batch with limited concurrency
+        tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        for i in range(0, len(prompts), batch_size):
-            batch_prompts = prompts[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            
-            print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
-            
-            # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Handle exceptions in batch results
-            processed_results = []
-            for j, result in enumerate(batch_results):
-                if isinstance(result, Exception):
-                    print(f"Exception in batch {batch_num}, prompt {j}: {result}")
-                    processed_results.append(None)
-                else:
-                    processed_results.append(result)
-            
-            all_results.extend(processed_results)
-            
-            # Add delay between batches (except for the last batch)
-            if i + batch_size < len(prompts):
-                print(f"Waiting {delay_between_batches} seconds before next batch...")
-                await asyncio.sleep(delay_between_batches)
+        # Handle exceptions in batch results
+        for j, result in enumerate(results):
+            if isinstance(result, Exception):
+                all_results.append(None)
+            else:
+                all_results.append(result)
         
-        print(f"Completed processing all {len(prompts)} prompts")
         return all_results
 
 
@@ -450,7 +403,7 @@ class DashScopeModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 5000, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -461,39 +414,20 @@ class DashScopeModel(BaseLLM):
             delay_between_batches: Delay in seconds between batches (default: 1.0)
         """
         all_results = []
-        total_batches = (len(prompts) + batch_size - 1) // batch_size
-        
-        print(f"Processing {len(prompts)} prompts in {total_batches} batches of size {batch_size}")
-        
-        for i in range(0, len(prompts), batch_size):
-            batch_prompts = prompts[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            
-            print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
-            
-            # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Handle exceptions in batch results
-            processed_results = []
-            for j, result in enumerate(batch_results):
-                if isinstance(result, Exception):
-                    print(f"Exception in batch {batch_num}, prompt {j}: {result}")
-                    processed_results.append(None)
-                else:
-                    processed_results.append(result)
-            
-            all_results.extend(processed_results)
-            
-            # Add delay between batches (except for the last batch)
-            if i + batch_size < len(prompts):
-                print(f"Waiting {delay_between_batches} seconds before next batch...")
-                await asyncio.sleep(delay_between_batches)
-        
-        print(f"Completed processing all {len(prompts)} prompts")
-        return all_results
 
+        # Process current batch with limited concurrency
+        tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Handle exceptions in batch results
+        for j, result in enumerate(results):
+            if isinstance(result, Exception):
+                all_results.append(None)
+            else:
+                all_results.append(result)
+        
+        return all_results
+    
 
 class GeminiModel(BaseLLM):
     """Wrapper for Google Gemini models."""
@@ -574,7 +508,7 @@ class GeminiModel(BaseLLM):
                     print(f"All retries failed for prompt '{prompt_content[:50]}...': {e}")
                     return None
     
-    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, batch_size: int = 200, delay_between_batches: float = 1.0, return_cost: bool = False) -> List[CallResult]:
+    async def batch_invoke(self, prompts: List[str], system_prompt: str = None, return_cost: bool = False) -> List[CallResult]:
         """
         Processes a list of prompts in batches with rate limiting to avoid overwhelming the API.
         
@@ -585,37 +519,18 @@ class GeminiModel(BaseLLM):
             delay_between_batches: Delay in seconds between batches (default: 1.0)
         """
         all_results = []
-        total_batches = (len(prompts) + batch_size - 1) // batch_size
         
-        print(f"Processing {len(prompts)} prompts in {total_batches} batches of size {batch_size}")
+        # Process current batch with limited concurrency
+        tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in prompts]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         
-        for i in range(0, len(prompts), batch_size):
-            batch_prompts = prompts[i:i + batch_size]
-            batch_num = i // batch_size + 1
-            
-            print(f"Processing batch {batch_num}/{total_batches} ({len(batch_prompts)} prompts)")
-            
-            # Process current batch with limited concurrency
-            tasks = [self._get_completion(prompt, system_prompt, return_cost) for prompt in batch_prompts]
-            batch_results = await asyncio.gather(*tasks, return_exceptions=True)
-            
-            # Handle exceptions in batch results
-            processed_results = []
-            for j, result in enumerate(batch_results):
-                if isinstance(result, Exception):
-                    print(f"Exception in batch {batch_num}, prompt {j}: {result}")
-                    processed_results.append(None)
-                else:
-                    processed_results.append(result)
-            
-            all_results.extend(processed_results)
-            
-            # Add delay between batches (except for the last batch)
-            if i + batch_size < len(prompts):
-                print(f"Waiting {delay_between_batches} seconds before next batch...")
-                await asyncio.sleep(delay_between_batches)
+        # Handle exceptions in batch results
+        for j, result in enumerate(results):
+            if isinstance(result, Exception):
+                all_results.append(None)
+            else:
+                all_results.append(result)
         
-        print(f"Completed processing all {len(prompts)} prompts")
         return all_results
 
 

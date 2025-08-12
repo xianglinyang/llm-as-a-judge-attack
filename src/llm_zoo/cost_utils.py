@@ -1,4 +1,5 @@
 # rough $ cost if pricing known (USD per 1M tokens)
+from typing import NamedTuple
 
 # Pricing information (USD per 1M tokens) - Update as needed
 MODEL_PRICING = {
@@ -31,6 +32,10 @@ MODEL_PRICING = {
     "claude-3-7-sonnet-20250219": {"input": 3.00, "output": 15.00},
 
     # OpenRouter OpenAI models
+    "openai/gpt-5-mini": {"input": 0.25*1.05, "output": 2.00*1.05},
+    "openai/gpt-5-nano": {"input": 0.05*1.05, "output": 0.40*1.05},
+    "openai/gpt-5-chat-latest": {"input": 1.25*1.05, "output": 10.00*1.05},
+    "openai/gpt-5": {"input": 1.25*1.05, "output": 10.00*1.05},
     "openai/o3-mini": {"input": 1.00*1.05, "output": 4.00*1.05},
     "openai/o3-mini-high": {"input": 1.00*1.05, "output": 4.00*1.05},
     "openai/o3": {"input": 2.00*1.05, "output": 8.00*1.05},
@@ -72,7 +77,17 @@ MODEL_PRICING = {
     "qwen/qwen3-235b-a22b-thinking-2507": {"input": 0.078*1.05, "output": 0.312*1.05},
     "qwen/qwen3-235b-a22b-2507": {"input": 0.078*1.05, "output": 0.312*1.05},
     "qwen/qwen3-30b-a3b-instruct-2507": {"input": 0.20*1.05, "output": 0.80*1.05},
+
+    "meta-llama/llama-3.3-70b-instruct": {"input": 0.038*1.05, "output": 0.12*1.05},
 }
+
+class CallResult(NamedTuple):
+    """Result of an API call with cost information"""
+    response: str
+    input_tokens: int
+    output_tokens: int
+    cost: float
+    model_name: str
 
 def calculate_cost(model_name: str, input_tokens: int, output_tokens: int) -> float:
     """Calculate cost for a given model and token usage"""
