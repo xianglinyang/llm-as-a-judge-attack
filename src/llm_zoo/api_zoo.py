@@ -7,7 +7,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
 # Implementation names
 openai_models = [
     "gpt-4.1",
@@ -287,7 +286,9 @@ def get_model_name(implementation_name):
     elif is_huggingface_model(implementation_name):
         return implementation_name.split("/")[-1]
     else:
-        raise ValueError(f"Implementation name {implementation_name} is not valid")
+        logger.warning(f"Implementation name {implementation_name} is not valid")
+        return implementation_name
+        # raise ValueError(f"Implementation name {implementation_name} is not valid")
 
 def is_valid_model(implementation_name):
     """
