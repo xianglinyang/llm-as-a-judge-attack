@@ -10,6 +10,7 @@ from src.text_encoder import TextEncoder, MiniLMTextEncoder
 from src.llm_zoo import BaseLLM, load_model
 from src.logging_utils import setup_logging
 from src.evolve_agent.utils import prepare_dataset_for_exploration, exclude_perfect_response, sample_and_filter_data, extract_result_from_trajectories, get_result_analysis, save_result_analysis, save_trajectories
+from src.llm_zoo.api_zoo import get_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -194,10 +195,10 @@ async def main(args):
         "judge_type": args.judge_type,
         "answer_position": args.answer_position,
         "dataset_name": args.dataset_name,
-        "judge_backbone": judge_model_backbone,
-        "baseline_response_model_name": args.baseline_response_model_name,
-        "llm_agent_name": args.llm_agent_name,
-        "response_model_name": args.response_model_name,
+        "judge_backbone": get_model_name(args.judge_model_name),
+        "baseline_response_model_name": get_model_name(args.baseline_response_model_name),
+        "llm_agent_name": get_model_name(args.llm_agent_name),
+        "response_model_name": get_model_name(args.response_model_name),
         "test_mode": args.test_mode,
         "lambda_reg": args.lambda_reg,
         "n_features": args.n_features,

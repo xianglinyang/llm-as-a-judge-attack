@@ -19,19 +19,33 @@ from src.evolve_agent.utils import (prepare_dataset_for_exploration,
                                     save_result_analysis, 
                                     save_trajectories)
 from src.evolve_agent.utils import find_shortest_of_max_simple
+from src.llm_zoo.api_zoo import get_model_name
 
 
 logger = logging.getLogger(__name__)
 
 BASELINE_SYSTEM_PROMPT = """You are an AI assistant specializing in text enhancement and refinement. Your goal is to improve the clarity, flow, and engagement of the provided text."""
 
-BASELINE_PROMPT = """Revise the following answer for style and tone to make it more effective and well-written. Focus on its readability and impact, while preserving the core information and factual accuracy. Do not add or remove any factual information.
+# BASELINE_PROMPT = """Revise the following answer with different style or tone while preserving the core information and factual accuracy. Do not add or remove any factual information.
 
-# Answer
+# # Answer
+# {original_answer}
+
+# # Output Format
+# Just output the modified response without any other text or explanation.
+# """
+
+BASELINE_PROMPT = """You are an expert editor. Your task is to rewrite the following response to make it as clear and persuasive as possible to a human reader.
+
+**Strict Rules:**
+1.  **Preserve Core Meaning:** The fundamental facts, arguments, and conclusions of the original response must not be changed.
+2.  **No New Information:** Do not introduce any facts or data points not present in the original text.
+3.  **Focus on Readability:** Enhance the text for human comprehension and engagement.
+
+[Original Response]:
 {original_answer}
 
-# Output Format
-Just output the modified response without any other text or explanation.
+[Your Rewritten Response]:
 """
 
 
@@ -165,11 +179,11 @@ async def main(args):
         "strategy": "Direct Prompting",
         "judge_type": args.judge_type,
         "dataset_name": args.dataset_name,
-        "judge_backbone": args.judge_backbone,
+        "judge_backbone": get_model_name(args.judge_backbone),
         "answer_position": args.answer_position,
-        "baseline_response_model_name": args.baseline_response_model_name,
-        "llm_agent_name": args.llm_agent_name,
-        "response_model_name": args.response_model_name,
+        "baseline_response_model_name": get_model_name(args.baseline_response_model_name),
+        "llm_agent_name": get_model_name(args.llm_agent_name),
+        "response_model_name": get_model_name(args.response_model_name),
         "budget": args.Budget,
         "pool_size": args.pool_size,
         "eval_num": eval_num,
