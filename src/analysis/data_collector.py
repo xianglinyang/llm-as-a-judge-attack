@@ -220,6 +220,8 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
         with open(path, "r") as f:
             data = json.load(f)
         # check match
+        if 'reward_type' not in data:
+            continue
         if dataset_name == data['dataset_name'] and reward_type == data['reward_type'] and judge_type == data['judge_type'] and judge_backbone == data['judge_backbone'] and response_model_name == data['response_model_name'] and helper_model_name == data['llm_agent_name'] and baseline_model_name == data['baseline_response_model_name'] and answer_position == data['answer_position']:
             logger.info(f"Find {file} for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
             match_files.append(path)
@@ -237,7 +239,8 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
         with open(path, "r") as f:
             data = json.load(f)
         trajectories = data['trajectories']
-        for trajectory in trajectories:
+        for full_trajectory in trajectories:
+            trajectory = full_trajectory['best_path']
             len_trajectory = len(trajectory)
             if len_trajectory <= 2:
                 continue
