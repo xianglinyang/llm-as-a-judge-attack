@@ -1,6 +1,6 @@
 #!/bin/bash
 
-parallel_num=8
+parallel_num=1
 
 # GPU Configuration
 per_gpu_jobs_num=1
@@ -17,47 +17,22 @@ dataset_names=(
     # "MLRBench"
 )
 response_models=(
-    # "openai/gpt-4.1-mini"
+    "gpt-4.1-mini"
     # "gemini-1.5-flash-8b"
-    "Qwen/Qwen3-14B"
+    # "Qwen/Qwen3-14B"
 )
 
 # ------------------------------------------------------------------------------------------------
 # api call
 # ------------------------------------------------------------------------------------------------
 
-# counter=0
-
-# for i in ${!dataset_names[@]}; do
-#     for j in ${!response_models[@]}; do
-#         python -m src.data.get_response_data \
-#             --dataset_name ${dataset_names[i]} \
-#             --response_model_name ${response_models[j]} \
-#             --data_dir ${data_dir} &
-            
-#         counter=$((counter + 1))
-#         if [ $((counter % parallel_num)) -eq 0 ]; then
-#             wait
-#         fi
-#     done
-# done
-# wait
-
-# ------------------------------------------------------------------------------------------------
-# vllm call
-# ------------------------------------------------------------------------------------------------
-
 counter=0
 
 for i in ${!dataset_names[@]}; do
     for j in ${!response_models[@]}; do
-
-        CUDA_VISIBLE_DEVICES=${gpu_ids[$((counter % jobs_num))]} python -m src.data.get_response_data \
+        python -m src.data.get_response_data \
             --dataset_name ${dataset_names[i]} \
             --response_model_name ${response_models[j]} \
-            --use_vllm \
-            --tensor_parallel_size 1 \
-            --gpu_memory_utilization 0.95 \
             --data_dir ${data_dir} &
             
         counter=$((counter + 1))
@@ -67,3 +42,28 @@ for i in ${!dataset_names[@]}; do
     done
 done
 wait
+
+# ------------------------------------------------------------------------------------------------
+# vllm call
+# ------------------------------------------------------------------------------------------------
+
+# counter=0
+
+# for i in ${!dataset_names[@]}; do
+#     for j in ${!response_models[@]}; do
+
+#         CUDA_VISIBLE_DEVICES=${gpu_ids[$((counter % jobs_num))]} python -m src.data.get_response_data \
+#             --dataset_name ${dataset_names[i]} \
+#             --response_model_name ${response_models[j]} \
+#             --use_vllm \
+#             --tensor_parallel_size 1 \
+#             --gpu_memory_utilization 0.95 \
+#             --data_dir ${data_dir} &
+            
+#         counter=$((counter + 1))
+#         if [ $((counter % parallel_num)) -eq 0 ]; then
+#             wait
+#         fi
+#     done
+# done
+# wait
