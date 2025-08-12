@@ -15,8 +15,8 @@ pool_sizes=(3)
 
 # LLM Agents
 llm_agents=(
-    "gemini-2.5-flash-lite"
-    # "gpt-4.1-nano"
+    # "gemini-2.5-flash-lite"
+    "gpt-4.1-nano"
 )
 
 # Response Models
@@ -28,16 +28,22 @@ response_models=(
 
 # Judge Models
 judge_model_names=(
-    "gemini-2.5-flash"
-    "o3"
-    "o3-mini"
-    "gemini-2.5-pro"
+    # "gemini-2.5-flash"
+    # "o3"
+    # "o3-mini"
+    # "gemini-2.5-pro"
     # "qwen/qwen3-235b-a22b-thinking-2507"
     # "qwen/qwen3-235b-a22b-2507"
     # "deepseek/deepseek-r1-0528"
     # "anthropic/claude-sonnet-4"
     # "meta-llama/llama-3.3-70b-instruct"
     # "qwen/qwen3-30b-a3b-instruct-2507"
+    # "qwen/qwen3-235b-a22b-2507"
+    # "google/gemini-2.5-flash"
+    # "openai/gpt-5"
+    # "meta-llama/llama-3.3-70b-instruct"
+    # "deepseek/deepseek-r1-0528"
+    "gemini-2.0-flash"
 )
 
 # Judge Types
@@ -58,7 +64,7 @@ test_modes=(
 datasets=(
     # "MTBench"
     "AlpacaEval"
-    "ArenaHard"
+    # "ArenaHard"
     # "MLRBench"
 )
 

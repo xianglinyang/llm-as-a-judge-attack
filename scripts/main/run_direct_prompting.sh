@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Parallel num
-parallel_num=2
+parallel_num=1
 
 # # GPU Configuration
 # per_gpu_jobs_num=1
@@ -10,34 +10,27 @@ parallel_num=2
 # gpu_ids=(0 1 2 3 4 5 6 7)
 
 # Hyperparameters
-budgets=(20 30)
-pool_sizes=(3 5)
+budgets=(20)
+pool_sizes=(3)
 
 # LLM Agents
 llm_agents=(
-    "gemini-2.5-flash-lite"
-    "gpt-4.1-nano"
+    "gpt-5-nano"
 )
 
 # Response Models
 response_models=(
-    "openai/gpt-4.1-mini"
-    "gemini-1.5-flash-8b"
-    "Qwen/Qwen3-14B"
+    "gpt-4.1-mini"
 )
 
 # Judge Models
 judge_model_names=(
+    # "qwen/qwen3-235b-a22b-2507"
     "google/gemini-2.5-flash"
-    "openai/o3"
-    "openai/o3-mini"
-    "google/gemini-2.5-pro"
-    "qwen/qwen3-235b-a22b-thinking-2507"
-    "qwen/qwen3-235b-a22b-2507"
-    "deepseek/deepseek-r1-0528"
-    "anthropic/claude-sonnet-4"
-    "meta-llama/llama-3.3-70b-instruct"
-    "qwen/qwen3-30b-a3b-instruct-2507"
+    # "openai/gpt-5"
+    # "meta-llama/llama-3.3-70b-instruct"
+    # "deepseek/deepseek-r1-0528"
+    # "gemini-2.0-flash"
 )
 
 # Judge Types
@@ -52,9 +45,9 @@ eval_num=1000
 
 
 datasets=(
-    "MTBench"
+    # "MTBench"
     "AlpacaEval"
-    "ArenaHard"
+    # "ArenaHard"
     # "MLRBench"
 )
 
