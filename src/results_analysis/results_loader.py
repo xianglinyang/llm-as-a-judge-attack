@@ -98,6 +98,8 @@ import pandas as pd
 import json
 from typing import List, Dict, Any, Union
 
+from src.llm_zoo.api_zoo import get_model_name
+
 
 def load_results(result_list: List[Dict[str, Any]]) -> pd.DataFrame:
     """
@@ -118,10 +120,10 @@ def load_results(result_list: List[Dict[str, Any]]) -> pd.DataFrame:
             'judge_type': result.get('judge_type'),
             'answer_position': result.get('answer_position'),
             'dataset_name': result.get('dataset_name'),
-            'judge_backbone': result.get('judge_backbone'),
-            'baseline_response_model_name': result.get('baseline_response_model_name'),
-            'llm_agent_name': result.get('llm_agent_name'),
-            'response_model_name': result.get('response_model_name'),
+            'judge_backbone': get_model_name(result.get('judge_backbone')),
+            'baseline_response_model_name': get_model_name(result.get('baseline_response_model_name')),
+            'llm_agent_name': get_model_name(result.get('llm_agent_name')),
+            'response_model_name': get_model_name(result.get('response_model_name')),
             'test_mode': result.get('test_mode'),
             'lambda_reg': result.get('lambda_reg'),
             'n_features': result.get('n_features'),
