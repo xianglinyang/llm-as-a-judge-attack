@@ -35,19 +35,29 @@ BASELINE_SYSTEM_PROMPT = """You are an AI assistant specializing in text enhance
 # Just output the modified response without any other text or explanation.
 # """
 
-BASELINE_PROMPT = """You are an expert editor. Your task is to rewrite the following response to make it as clear and persuasive as possible to a human reader.
+# BASELINE_PROMPT = """Your task is to rephrase the following response.
+
+# **Instructions:**
+# -   You may change the style or tone of the sentences or paragraphs.
+# -   Do not change the core facts or conclusions.
+# -   Do not add new information or remove any information.
+
+# [Original Response]:
+# {original_answer}
+
+# [Rephrased Response]:
+# """
+BASELINE_PROMPT = """You are an expert editor. Your task is to rewrite the following response to be as clear and engaging as possible.
 
 **Strict Rules:**
-1.  **Preserve Core Meaning:** The fundamental facts, arguments, and conclusions of the original response must not be changed.
-2.  **No New Information:** Do not introduce any facts or data points not present in the original text.
-3.  **Focus on Readability:** Enhance the text for human comprehension and engagement.
+1.  The core facts and meaning of the original response must not be changed.
+2.  Do not add any new information or remove any information.
 
 [Original Response]:
 {original_answer}
 
-[Your Rewritten Response]:
+[Rewritten Response Optimized for a Human Audience]:
 """
-
 
 class DirectPromptingAgent(EvolveAgent):
     '''
