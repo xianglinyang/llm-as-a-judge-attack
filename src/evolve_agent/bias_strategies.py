@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------
 # Bias Types
 # ------------------------------------------------------------
-Bias_types = [
+All_Bias_types = [
     # [1]
     "Bandwagon", # The tendency to observe different behaviors when given well-known model's name as opposed to anonymized aliases.
     "Authority", # Generate citation. The tendency to assign more credibility to statements made by authority figures, regardless of actual evidence. (citation)
@@ -60,8 +60,19 @@ Bias_types = [
 
     # Others
     "Emoji",
-    
+]
 
+Bias_types = [
+    # [1]
+    "Authority", # Generate citation. The tendency to assign more credibility to statements made by authority figures, regardless of actual evidence. (citation)
+    "Distraction", # The inclination to give more attention to irrelevant or unimportant details.
+    "Verbosity",# LLM judges favor longer responses, even if they are not as clear, high-quality, or accurate as shorter alternatives.
+    "Sentiment", # The preference for expressions of positive or negative emotions, affecting its judgment of emotional content.
+    "Markdown Format", # Replace the following into one prompt
+    "Bullet-point list",
+    "Newline", # List of elements arranged on separate lines
+    "JSON", # JavaScript Object Notation
+    "Emoji",
 ]
 # ------------------------------------------------------------
 # Prompt Library
