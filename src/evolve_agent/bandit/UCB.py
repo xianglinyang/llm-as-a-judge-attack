@@ -21,7 +21,7 @@ from src.evolve_agent.utils import (prepare_dataset_for_exploration,
                                     save_trajectories, 
                                     save_metrics)
 from src.llm_zoo.api_zoo import get_model_name
-from src.evolve_agent.utils import _worst_index, _best_item, _estimate_tokens, _select_from_pool_uniform
+from src.evolve_agent.utils import _worst_index, _best_item, _estimate_tokens, _select_from_pool_uniform, _get_pool_metrics, _batch_estimate_tokens
 from src.evolve_agent.bias_strategies import Bias_types
     
 
@@ -97,6 +97,54 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
             ucb_gap = 0.0
             
         return ci_width, ucb_gap
+
+    def _batch_compute_ucb_metrics_per_model(self, context_x_list, model_idxs):
+        """
+        Batch compute UCB metrics for multiple models/questions.
+        OPTIMIZATION: Used in batch_explore for efficient metrics computation.
+        
+        Args:
+            context_x_list (np.array): (n_samples, n_features, 1) contexts
+            model_idxs (List[int]): Model index for each sample
+            
+        Returns:
+            tuple: (batch_means, batch_ss, batch_ucbs) each of shape (n_samples, n_arms)
+        """
+        n_samples = context_x_list.shape[0]
+        batch_means = np.zeros((n_samples, self.n_arms))
+        batch_ss = np.zeros((n_samples, self.n_arms))
+        batch_ucbs = np.zeros((n_samples, self.n_arms))
+        
+        # Group by model_idx for efficient processing (like in batch_predict)
+        unique_models = list(set(model_idxs))
+        X = context_x_list.squeeze(-1)  # (n_samples, n_features)
+        
+        for model_idx in unique_models:
+            sample_mask = np.array(model_idxs) == model_idx
+            sample_indices = np.where(sample_mask)[0]
+            
+            if len(sample_indices) == 0:
+                continue
+                
+            X_model = X[sample_indices]  # (n_model_samples, n_features)
+            
+            for arm_idx in range(self.n_arms):
+                A_inv = self.As_inv[model_idx][arm_idx]  # (d, d)
+                theta = self.thetas[model_idx][arm_idx].flatten()  # (d,)
+                
+                # Vectorized computations
+                means = X_model @ theta  # (n_model_samples,)
+                X_Ainv = X_model @ A_inv  # (n_model_samples, d)
+                s2_vals = np.sum(X_Ainv * X_model, axis=1)  # (n_model_samples,)
+                ss = np.sqrt(np.maximum(s2_vals, 1e-18))
+                ucbs = means + self.alpha * ss
+                
+                # Store results
+                batch_means[sample_indices, arm_idx] = means
+                batch_ss[sample_indices, arm_idx] = ss
+                batch_ucbs[sample_indices, arm_idx] = ucbs
+        
+        return batch_means, batch_ss, batch_ucbs
 
     def predict(self, context_x, model_idx):
         """
@@ -560,11 +608,14 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                             replacements[i] += 1
 
                 rounds_consumed += 1
-                # per-round metrics after each arm probe
+                # per-round metrics after each arm probe (OPTIMIZED)
+                # Batch compute UCB metrics for cold-start
+                batch_means, batch_ss, batch_ucbs = self._batch_compute_ucb_metrics_per_model(context_x, list(range(n)))
+                
                 for i in range(n):
                     pool = pools[i]
-                    best_now = _best_item(pool)["score"]
-                    pool_mean = sum(x["score"] for x in pool) / len(pool)
+                    best_now, pool_mean = _get_pool_metrics(pool)  # Optimized pool computation
+                    
                     m = metrics_list[i]
                     m["best_so_far"].append(best_now)
                     m["pool_mean"].append(pool_mean)
@@ -572,9 +623,23 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                     denom = max(1, totals_tokens[i] / 1000)
                     m["lift_per_1k_tokens"].append((best_now - best0_list[i]) / denom)
 
-                    # UCB-specific metrics (use context from current iteration)
-                    x_col = context_x[i]  # Use current context instead of init context
-                    ci_width_i, ucb_gap_i = self._compute_gap_metrics(x_col, i)
+                    # OPTIMIZATION: Use pre-computed batch UCB metrics for cold-start
+                    if i < len(batch_ucbs):
+                        ucbs_i = batch_ucbs[i]
+                        ss_i = batch_ss[i]
+                        
+                        best_arm = int(np.argmax(ucbs_i))
+                        ci_width_i = 2.0 * self.alpha * ss_i[best_arm]
+                        
+                        if len(ucbs_i) >= 2:
+                            sorted_ucbs = np.sort(ucbs_i)[::-1]
+                            ucb_gap_i = float(sorted_ucbs[0] - sorted_ucbs[1])
+                        else:
+                            ucb_gap_i = 0.0
+                    else:
+                        # Fallback to individual computation
+                        ci_width_i, ucb_gap_i = self._compute_gap_metrics(context_x[i], i)
+                        
                     m["ci_width"].append(ci_width_i)
                     m["ucb_gap"].append(ucb_gap_i)
 
@@ -583,14 +648,13 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
 
         # ---- 4) Main loop
         for t in range(1, remaining_rounds + 1):
-            # (a) pick one seed per question (uniform over each pool)
+            # (a) pick one seed per question (uniform over each pool) - OPTIMIZED
             seeds = []
             curr_answers = []
-            for pool in pools:
-                si = _select_from_pool_uniform(pool)
-                seed = pool[si]
-                seeds.append(seed)
-                curr_answers.append(seed["answer"])
+            # Batch selection can't be easily vectorized due to different pool sizes,
+            # but we can optimize the list creation
+            seeds = [pool[_select_from_pool_uniform(pool)] for pool in pools]
+            curr_answers = [seed["answer"] for seed in seeds]
 
             # (b) build contexts on the current answers
             context_x = self.get_context_x_batch(question_list, curr_answers)
@@ -625,7 +689,18 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                 arm_idx = int(chosen_arm_list[i][0]) if isinstance(chosen_arm_list[i], (list, np.ndarray)) else int(chosen_arm_list[i])
                 self.update(arm_idx, context_x[i], float(reward_list[i]), i)
 
-            # (g) pool replacement
+            # (g) pool replacement (OPTIMIZED)
+            # Batch token estimation for all valid responses
+            valid_responses = [resp for resp in new_responses if resp is not None]
+            valid_indices = [i for i, resp in enumerate(new_responses) if resp is not None]
+            
+            if valid_responses:
+                from src.evolve_agent.utils import _batch_estimate_tokens
+                batch_tokens = _batch_estimate_tokens(valid_responses)
+                token_map = dict(zip(valid_indices, batch_tokens))
+            else:
+                token_map = {}
+
             for i in range(n):
                 if new_responses[i] is None:
                     continue
@@ -635,7 +710,7 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                 new_ans = new_responses[i]
                 new_s = float(new_scores[i])
                 new_e = new_expls[i]
-                new_tok = _estimate_tokens(new_ans)
+                new_tok = token_map.get(i, _estimate_tokens(new_ans))  # Use batch result if available
                 totals_tokens[i] += new_tok
 
                 arm_idx = int(chosen_arm_list[i][0]) if isinstance(chosen_arm_list[i], (list, np.ndarray)) else int(chosen_arm_list[i])
@@ -658,12 +733,17 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                         pool[wi] = new_item
                         replacements[i] += 1
 
-            # (h) metrics for this round
+            # (h) metrics for this round (OPTIMIZED)
             total_round = rounds_consumed + t
+            
+            # OPTIMIZATION: Batch compute UCB-specific metrics for all questions
+            batch_means, batch_ss, batch_ucbs = self._batch_compute_ucb_metrics_per_model(context_x, list(range(n)))
+            
             for i in range(n):
                 pool = pools[i]
-                best_now = _best_item(pool)["score"]
-                pool_mean = sum(x["score"] for x in pool) / len(pool)
+
+                best_now, pool_mean = _get_pool_metrics(pool)  # Optimized pool computation
+                
                 m = metrics_list[i]
                 m["best_so_far"].append(best_now)
                 m["pool_mean"].append(pool_mean)
@@ -671,11 +751,23 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                 denom = max(1, totals_tokens[i] / 1000)
                 m["lift_per_1k_tokens"].append((best_now - best0_list[i]) / denom)
 
-                # UCB-specific metrics for this sample
-                x_col = context_x[i]                      # shape (d,1)
-                ci_width_i, ucb_gap_i = self._compute_gap_metrics(x_col, i)
+                # OPTIMIZATION: Use pre-computed batch UCB metrics
+                if i < len(batch_ucbs):
+                    ucbs_i = batch_ucbs[i]
+                    ss_i = batch_ss[i]
+                    
+                    best_arm = int(np.argmax(ucbs_i))
+                    ci_width_i = 2.0 * self.alpha * ss_i[best_arm]
+                    
+                    if len(ucbs_i) >= 2:
+                        sorted_ucbs = np.sort(ucbs_i)[::-1]
+                        ucb_gap_i = float(sorted_ucbs[0] - sorted_ucbs[1])
+                    else:
+                        ucb_gap_i = 0.0
+                else:
+                    # Fallback to individual computation if batch failed
+                    ci_width_i, ucb_gap_i = self._compute_gap_metrics(context_x[i], i)
                 
-                m = metrics_list[i]
                 m["ci_width"].append(ci_width_i)
                 m["ucb_gap"].append(ucb_gap_i)
 
