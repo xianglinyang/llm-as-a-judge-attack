@@ -84,7 +84,7 @@ async def main(args):
 
     data_dir = args.data_dir
     dataset_name = args.dataset_name
-    model_name = args.model_name
+    model_name = args.assign_model_name
 
     await assign_category(data_dir, dataset_name, assign_model_name=model_name)
 
