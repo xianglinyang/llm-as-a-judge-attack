@@ -748,6 +748,34 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                 means.append(mean); ss.append(s); ucbs.append(mean + alpha * s)
             return means, ss, ucbs
 
+        def _batch_arm_stats(X: np.ndarray):
+            """Vectorized arm stats for entire batch - OPTIMIZATION."""
+            alpha = getattr(self, "alpha", 1.2)
+            n_samples = X.shape[0]
+            
+            batch_means = np.zeros((n_samples, self.n_arms))
+            batch_ss = np.zeros((n_samples, self.n_arms))
+            batch_ucbs = np.zeros((n_samples, self.n_arms))
+            
+            for a in range(self.n_arms):
+                Ainv = self.As_inv[0][a]  # (d, d)
+                theta = self.thetas[0][a]  # (d, 1)
+                
+                # Vectorized mean: X @ theta for all samples
+                X_flat = X.squeeze(-1)  # (n_samples, d)
+                theta_flat = theta.flatten()  # (d,)
+                batch_means[:, a] = X_flat @ theta_flat
+                
+                # Vectorized uncertainty: sqrt(X @ Ainv @ X.T) for all samples
+                X_Ainv = X_flat @ Ainv  # (n_samples, d)
+                s2_vals = np.sum(X_Ainv * X_flat, axis=1)  # (n_samples,)
+                batch_ss[:, a] = np.sqrt(np.maximum(s2_vals, 1e-18))
+                
+                # UCB scores
+                batch_ucbs[:, a] = batch_means[:, a] + alpha * batch_ss[:, a]
+            
+            return batch_means, batch_ss, batch_ucbs
+
         def _ucb_choose_arm(x_col: np.ndarray, eps: float) -> int:
             if np.random.rand() < eps:
                 return np.random.randint(self.n_arms)
@@ -755,18 +783,27 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
             return int(np.argmax(ucbs))
 
         def _round_medians(qs: List[str], ans: List[str]) -> Dict[str, float]:
+            """Optimized metrics computation using vectorized operations."""
             alpha = getattr(self, "alpha", 1.2)
             X = _ctx_batch(qs, ans)
-            ci_vals, gaps = [], []
+            
+            # Use vectorized arm stats computation
+            batch_means, batch_ss, batch_ucbs = _batch_arm_stats(X)
+            
+            # Compute CI width and gaps vectorized
+            best_arms = np.argmax(batch_ucbs, axis=1)  # (n_samples,)
+            ci_vals = 2.0 * alpha * batch_ss[np.arange(len(qs)), best_arms]
+            
+            # Compute gaps efficiently
+            gaps = []
             for i in range(len(qs)):
-                means, ss, ucbs = _arm_stats_for_x(X[i])
-                best_a = int(np.argmax(ucbs))
-                ci_vals.append(2.0 * alpha * ss[best_a])
+                ucbs = batch_ucbs[i]
                 if len(ucbs) >= 2:
-                    srt = sorted(ucbs, reverse=True)
-                    gaps.append(float(srt[0] - srt[1]))
+                    sorted_ucbs = np.sort(ucbs)[::-1]  # Sort descending
+                    gaps.append(float(sorted_ucbs[0] - sorted_ucbs[1]))
                 else:
                     gaps.append(0.0)
+            
             return {"med_ci": float(np.median(ci_vals)), "med_gap": float(np.median(gaps))}
 
         def _maybe_stop() -> bool:
@@ -778,11 +815,9 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
             return ok_streak >= patience
 
         # ======================
-        # Phase 1: Burn-in passes
+        # Phase 1: Burn-in passes (OPTIMIZED)
         # ======================
         for _ in range(max(0, burnin_passes)):
-            # contexts from current answers (can be init on first pass)
-            X = _ctx_batch(question_list, curr_answers)
             for arm_idx in range(self.n_arms):
                 # mutate ALL questions with this arm
                 strategy = (self.bias_modifier.Bias_types[arm_idx]
@@ -802,7 +837,7 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                 except Exception:
                     continue
 
-                # update ONE global model with contexts of the mutated answers
+                # OPTIMIZATION: Compute contexts only once per arm
                 X_new = _ctx_batch(question_list, new_responses)
                 for i in range(n):
                     self.update(arm_idx, X_new[i], float(rewards[i]), model_idx=0)
@@ -810,27 +845,53 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
                 # advance current answers to diversify contexts
                 curr_answers = new_responses
 
-                # metrics for this burn-in subround
+                # OPTIMIZATION: Compute metrics only if early stopping enabled or every N rounds
                 rounds += 1
-                m = _round_medians(question_list, curr_answers)
-                median_ci.append(m["med_ci"])
-                median_gap.append(m["med_gap"])
-                if _maybe_stop():
-                    if save_path:
-                        os.makedirs(save_path, exist_ok=True)
-                        self.save_policy_model(save_path)
-                    return {"phase": "burnin", "rounds": rounds, "median_ci": median_ci, "median_gap": median_gap,
-                            "saved_to": save_path}
+                if enable_ci_early_stop or (rounds % max(1, self.n_arms // 2) == 0):
+                    m = _round_medians(question_list, curr_answers)
+                    median_ci.append(m["med_ci"])
+                    median_gap.append(m["med_gap"])
+                    if _maybe_stop():
+                        if save_path:
+                            os.makedirs(save_path, exist_ok=True)
+                            self.save_policy_model(save_path)
+                        return {"phase": "burnin", "rounds": rounds, "median_ci": median_ci, "median_gap": median_gap,
+                                "saved_to": save_path}
+                else:
+                    # Fill with previous values to maintain tracking
+                    if median_ci:
+                        median_ci.append(median_ci[-1])
+                        median_gap.append(median_gap[-1])
 
         # ==========================
-        # Phase 2: UCB+ε warm-up passes
+        # Phase 2: UCB+ε warm-up passes (OPTIMIZED)
         # ==========================
         for u in range(max(0, ucb_passes)):
             eps = float(epsilon_schedule[min(u, len(epsilon_schedule) - 1)])
 
-            # choose arm per question via UCB+ε on current contexts
+            # OPTIMIZATION: Compute contexts and arm selection in batch
             X = _ctx_batch(question_list, curr_answers)
-            chosen_arms = [_ucb_choose_arm(X[i], eps) for i in range(n)]
+            
+            # Vectorized UCB+ε arm selection
+            if eps > 0.0:
+                # Mixed strategy: some random, some UCB
+                random_mask = np.random.rand(n) < eps
+                chosen_arms = np.zeros(n, dtype=int)
+                
+                # Random arms for exploration
+                chosen_arms[random_mask] = np.random.randint(0, self.n_arms, size=np.sum(random_mask))
+                
+                # UCB arms for exploitation (vectorized)
+                if not np.all(random_mask):
+                    X_ucb = X[~random_mask]
+                    if len(X_ucb) > 0:
+                        _, _, batch_ucbs = _batch_arm_stats(X_ucb)
+                        chosen_arms[~random_mask] = np.argmax(batch_ucbs, axis=1)
+            else:
+                # Pure UCB selection (vectorized)
+                _, _, batch_ucbs = _batch_arm_stats(X)
+                chosen_arms = np.argmax(batch_ucbs, axis=1)
+            
             strategies = [
                 (self.bias_modifier.Bias_types[a]
                 if hasattr(self.bias_modifier, "Bias_types") else Bias_types[a])
@@ -849,7 +910,7 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
             except Exception:
                 continue
 
-            # update global model with mutated contexts
+            # OPTIMIZATION: Batch context computation and updates
             X_new = _ctx_batch(question_list, new_responses)
             for i in range(n):
                 self.update(int(chosen_arms[i]), X_new[i], float(rewards[i]), model_idx=0)
