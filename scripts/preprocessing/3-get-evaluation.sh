@@ -5,10 +5,11 @@ parallel_num=1
 data_dir="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
 
 dataset_names=(
-    "MTBench"
-    "AlpacaEval"
-    "ArenaHard"
+    # "MTBench"
+    # "AlpacaEval"
+    # "ArenaHard"
     # "MLRBench"
+    "UltraFeedback"
 )
 response_models=(
     "gpt-4.1-mini"
@@ -19,10 +20,10 @@ response_models=(
 # Judge Models
 judge_models=(
     "qwen/qwen3-235b-a22b-2507"
-    "google/gemini-2.5-flash"
-    "openai/gpt-5"
-    "meta-llama/llama-3.3-70b-instruct"
-    "deepseek/deepseek-r1-0528"
+    # "google/gemini-2.5-flash"
+    # "openai/gpt-5"
+    # "meta-llama/llama-3.3-70b-instruct"
+    # "deepseek/deepseek-r1-0528"
 )
 
 

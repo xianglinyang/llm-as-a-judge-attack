@@ -11,10 +11,11 @@ gpu_ids=(0 1 2 3 4 5 6 7)
 data_dir="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
 
 dataset_names=(
-    "MTBench"
-    "AlpacaEval"
-    "ArenaHard"
+    # "MTBench"
+    # "AlpacaEval"
+    # "ArenaHard"
     # "MLRBench"
+    "UltraFeedback"
 )
 response_models=(
     "gpt-4.1-mini"

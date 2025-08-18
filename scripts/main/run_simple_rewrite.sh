@@ -15,7 +15,8 @@ pool_sizes=(3)
 
 # LLM Agents
 llm_agents=(
-    "gpt-5-nano"
+    # "gpt-5-nano"
+    "gpt-4.1-nano"
 )
 
 # Response Models
@@ -25,12 +26,21 @@ response_models=(
 
 # Judge Models
 judge_model_names=(
-    # "qwen/qwen3-235b-a22b-2507"
-    "google/gemini-2.5-flash"
-    # "openai/gpt-5"
+    "qwen/qwen3-235b-a22b-2507"
     # "meta-llama/llama-3.3-70b-instruct"
     # "deepseek/deepseek-r1-0528"
+    # "qwen/qwen3-30b-a3b-instruct-2507"
+    # "gemini-2.5-flash"
     # "gemini-2.0-flash"
+    # "openai/gpt-5"
+    # "openai/gpt-4.1"
+    # "openai/o3-mini"
+    # "google/gemini-2.5-pro"
+)
+
+template_names=(
+    "holistic"
+    "improve"
 )
 
 # Judge Types
@@ -77,26 +87,29 @@ for budget in ${budgets[@]}; do
                 for judge_model_name in ${judge_model_names[@]}; do
                     for judge_type in ${judge_types[@]}; do
                         for dataset in ${datasets[@]}; do
-                            # parallel num
-                            python -m src.evolve_agent.direct_prompting \
-                            --judge_type ${judge_type} \
-                            --Budget ${budget} \
-                            --pool_size ${pool_size} \
-                            --judge_backbone ${judge_model_name} \
-                            --llm_agent_name ${llm_agent} \
-                            --dataset_name ${dataset} \
-                            --response_model_name ${response_model} \
-                            --eval_num ${eval_num} \
-                            --data_dir /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data \
-                            --save_trajectory_path /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/ &
+                        for template_name in ${template_names[@]}; do
+                                # parallel num
+                                python -m src.evolve_agent.simple_rewrite \
+                                --judge_type ${judge_type} \
+                                --Budget ${budget} \
+                                --pool_size ${pool_size} \
+                                --judge_backbone ${judge_model_name} \
+                                --llm_agent_name ${llm_agent} \
+                                --dataset_name ${dataset} \
+                                --response_model_name ${response_model} \
+                                --eval_num ${eval_num} \
+                                --template_name ${template_name} \
+                                --data_dir /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data \
+                                --save_trajectory_path /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/ &
 
-                            # Increment counter
-                            counter=$((counter + 1))
-                            
-                            # If we've launched jobs_num jobs, wait for them to complete
-                            if [ $((counter % parallel_num)) -eq 0 ]; then
-                                wait
-                            fi
+                                # Increment counter
+                                counter=$((counter + 1))
+                                
+                                # If we've launched jobs_num jobs, wait for them to complete
+                                if [ $((counter % parallel_num)) -eq 0 ]; then
+                                    wait
+                                fi
+                            done
                         done
                     done
                 done

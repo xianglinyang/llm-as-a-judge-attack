@@ -5,13 +5,14 @@ parallel_num=4
 data_dir="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
 
 dataset_names=(
-    "MTBench"
-    "AlpacaEval"
-    "ArenaHard"
+    # "MTBench"
+    # "AlpacaEval"
+    # "ArenaHard"
     # "MLRBench"
+    "UltraFeedback"
 )
 
-assign_model="gpt-4.1-mini"
+assign_model="gpt-5-nano"
 
 counter=0
 
