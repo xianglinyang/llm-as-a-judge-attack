@@ -78,12 +78,59 @@ class RegressionModel:
         # logger.info(results.bse)
         # logger.info("\nT-values:")
         # logger.info(results.tvalues)
+        return coefficients, p_values
     
     # TODO
     def kernel_ridge_regression(self, X, y):
         pass
 
-   
+
+def get_feature_model_correlation(data_dir, data_type, dataset_list, reward_type, judge_type, judge_backbone, response_model_name, helper_model_name):
+
+    init_df_list = []
+    modified_df_list = []
+    init_y_list = []
+    modified_y_list = []
+    feature_names_list = []
+
+    for dataset_name in dataset_list:
+        # 1. extract features
+        init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type)
+
+        # 2. collect the data
+        init_df_list.append(init_df)
+        modified_df_list.append(modified_df)
+        init_y_list.append(init_y)
+        modified_y_list.append(modified_y)
+        feature_names_list.append(feature_names)
+    
+    # 3. merge the data
+    init_df = pd.concat(init_df_list, axis=0)
+    modified_df = pd.concat(modified_df_list, axis=0)
+    init_y = pd.concat(init_y_list, axis=0)
+    modified_y = pd.concat(modified_y_list, axis=0)
+    feature_names = feature_names_list[0]
+
+    # if no data available, return None
+    if len(init_df) == 0:
+        return None, None, None
+    
+    # 4. get the change difference
+    X_change = modified_df - init_df
+    y_change = modified_y - init_y
+    # return X_change, y_change, feature_names
+
+    # 5. show the first 5 rows of the data
+    logger.info("Sample X_change (first 5 rows):")
+    logger.info(X_change.head())
+    logger.info("Sample y_change (first 5 rows):")
+    logger.info(y_change.head())
+
+    # 6. fit the regression model
+    regression_model = RegressionModel()
+    coefficients, p_values = regression_model.linear_regression(X_change, y_change)
+    return coefficients, p_values, feature_names
+
 
 
 if __name__ == "__main__":
@@ -100,22 +147,24 @@ if __name__ == "__main__":
     dataset_name = "AlpacaEval"
     judge_type = "pointwise"
     judge_backbone = "gemini-2.0-flash"
-    response_model_name = "gpt-4o-mini"
-    helper_model_name = "gpt-4.1-nano"
+    response_model_name = "gpt-4.1-mini"
+    helper_model_name = "gemini-1.5-flash-8b"
 
-    # 1. extract features
-    init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type)
+    coefficients, p_values, feature_names = get_feature_model_correlation(data_dir, data_type, ["AlpacaEval", "ArenaHard", "MTBench"], reward_type, judge_type, judge_backbone, response_model_name, helper_model_name)
 
-    # 2. get the change difference
-    X_change = modified_df - init_df
-    y_change = modified_y - init_y
+    # # 1. extract features
+    # init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type)
 
-    # 3. show the first 5 rows of the data
-    logger.info("Sample X_change (first 5 rows):")
-    logger.info(X_change.head())
-    logger.info("Sample y_change (first 5 rows):")
-    logger.info(y_change.head())
+    # # 2. get the change difference
+    # X_change = modified_df - init_df
+    # y_change = modified_y - init_y
 
-    # 2. fit the regression model
-    regression_model = RegressionModel()
-    regression_model.linear_regression(X_change, y_change)
+    # # 3. show the first 5 rows of the data
+    # logger.info("Sample X_change (first 5 rows):")
+    # logger.info(X_change.head())
+    # logger.info("Sample y_change (first 5 rows):")
+    # logger.info(y_change.head())
+
+    # # 2. fit the regression model
+    # regression_model = RegressionModel()
+    # regression_model.linear_regression(X_change, y_change)

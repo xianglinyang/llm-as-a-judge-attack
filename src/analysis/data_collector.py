@@ -225,36 +225,63 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
         if dataset_name == data['dataset_name'] and reward_type == data['reward_type'] and judge_type == data['judge_type'] and judge_backbone == data['judge_backbone'] and response_model_name == data['response_model_name'] and helper_model_name == data['llm_agent_name'] and baseline_model_name == data['baseline_response_model_name'] and answer_position == data['answer_position']:
             logger.info(f"Find {file} for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
             match_files.append(path)
-    if len(match_files) == 0:
-        raise ValueError(f"No data found for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
     
-
     init_answer_list = []
     init_score_list = []
     strategy_list = []
     final_answer_list = []
     final_score_list = []
+
+    if len(match_files) == 0:
+        logger.warning(f"No data found for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
+        return []
+        # raise ValueError(f"No data found for {dataset_name} with judge type {judge_type}, judge backbone {judge_backbone}, response model {response_model_name}, helper model {helper_model_name}, baseline model {baseline_model_name}, and answer position {answer_position}")
+
+
+    # use all match files
+    # for path in match_files:
+    #     with open(path, "r") as f:
+    #         data = json.load(f)
+    #     trajectories = data['trajectories']
+    #     for full_trajectory in trajectories:
+    #         trajectory = full_trajectory['best_path']
+    #         len_trajectory = len(trajectory)
+    #         if len_trajectory <= 2:
+    #             continue
+    #         init_step = trajectory[1]
+    #         init_score, _, init_answer, _ = init_step
+    #         current_strategy_list = []
+    #         for step in trajectory[2:]:
+    #             score, _, answer, _ = step
+    #             current_strategy_list.append(step[3])
+    #             strategy_list.append(current_strategy_list.copy())
+    #             init_answer_list.append(init_answer)
+    #             init_score_list.append(init_score)
+    #             final_answer_list.append(answer)
+    #             final_score_list.append(score)
+
+    
     # use the lastest file
-    for path in match_files:
-        with open(path, "r") as f:
-            data = json.load(f)
-        trajectories = data['trajectories']
-        for full_trajectory in trajectories:
-            trajectory = full_trajectory['best_path']
-            len_trajectory = len(trajectory)
-            if len_trajectory <= 2:
-                continue
-            init_step = trajectory[1]
-            init_score, _, init_answer, _ = init_step
-            current_strategy_list = []
-            for step in trajectory[2:]:
-                score, _, answer, _ = step
-                current_strategy_list.append(step[3])
-                strategy_list.append(current_strategy_list.copy())
-                init_answer_list.append(init_answer)
-                init_score_list.append(init_score)
-                final_answer_list.append(answer)
-                final_score_list.append(score)
+    path = match_files[-1]
+    with open(path, "r") as f:
+        data = json.load(f)
+    trajectories = data['trajectories']
+    for full_trajectory in trajectories:
+        trajectory = full_trajectory['best_path']
+        len_trajectory = len(trajectory)
+        if len_trajectory <= 2:
+            continue
+        init_step = trajectory[1]
+        init_score, _, init_answer, _ = init_step
+        current_strategy_list = []
+        for step in trajectory[2:]:
+            score, _, answer, _ = step
+            current_strategy_list.append(step[3])
+            strategy_list.append(current_strategy_list.copy())
+            init_answer_list.append(init_answer)
+            init_score_list.append(init_score)
+            final_answer_list.append(answer)
+            final_score_list.append(score)
         
     new_data_pairs = []
     for init_answer, init_score, strategy, final_answer, final_score in zip(init_answer_list, init_score_list, strategy_list, final_answer_list, final_score_list):
