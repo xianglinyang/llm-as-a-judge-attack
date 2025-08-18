@@ -4,6 +4,7 @@ import os
 import json
 import time
 import random
+from typing import Dict, List
 
 from src.data.data_utils import load_dataset_for_exploration
 from src.llm_evaluator import JudgeType, load_judge_model
@@ -23,6 +24,117 @@ def find_shortest_of_max_simple(data):
     
     # 3. On this smaller list, find the item with the minimum length.
     return min(all_max_items, key=len)
+
+def find_longest_of_min_simple(data):
+    if not data:
+        return None
+    
+    # 1. First pass: Find the minimum key value.
+    min_key = min(item[0] for item in data)
+
+    # 2. Second pass: Create a new list of all items that have that min key.
+    all_min_items = [item for item in data if item[0] == min_key]
+    
+    # 3. On this smaller list, find the item with the maximum length.
+    return max(all_min_items, key=len)
+
+def find_longest_of_min_simple_index(data):
+    if not data:
+        return None
+    
+    # 1. First pass: Find the minimum key value.
+    min_key = min(item[0] for item in data)
+    
+    # 2. Second pass: Create a new list of all items that have that min key.
+    all_min_items = [item for item in data if item[0] == min_key]
+    
+    # 3. On this smaller list, find the item with the maximum length.
+    return data.index(max(all_min_items, key=len))
+
+def _estimate_tokens(txt: str) -> int:
+    # lightweight token proxy; swap with your tokenizer if available
+    # e.g., return self.tokenizer.count_tokens(txt)
+    return max(1, len(txt.split()))
+
+def _batch_estimate_tokens(texts: List[str]) -> List[int]:
+    # Batch token estimation for better performance
+    return [max(1, len(txt.split())) for txt in texts]
+
+def _get_pool_metrics(pool: List[Dict]) -> tuple[float, float]:
+    # Get best score and pool mean in single pass
+    if not pool:
+        return 0.0, 0.0
+    
+    scores = [item["score"] for item in pool]
+    return max(scores), sum(scores) / len(scores)
+
+def _find_pool_extremes(pool: List[Dict]) -> tuple[int, int]:
+    # Find both best and worst indices in single pass
+    if not pool:
+        raise ValueError("Empty pool")
+    
+    if len(pool) == 1:
+        return 0, 0
+    
+    best_score = worst_score = pool[0]["score"]
+    best_i = worst_i = 0
+    
+    for i, item in enumerate(pool):
+        score = item["score"]
+        
+        # Check for best
+        if score > best_score or (score == best_score and len(item['history']) < len(pool[best_i]['history'])):
+            best_score = score
+            best_i = i
+        
+        # Check for worst
+        if score < worst_score or (score == worst_score and len(item['history']) > len(pool[worst_i]['history'])):
+            worst_score = score
+            worst_i = i
+    
+    return best_i, worst_i
+
+def _select_from_pool_uniform(pool: List[Dict]) -> int:
+    return random.randrange(len(pool))
+
+def _best_item(pool: List[Dict]) -> Dict:
+    # highest score with the shortest history - optimized
+    if not pool:
+        raise ValueError("Empty pool")
+    
+    if len(pool) == 1:
+        return pool[0]
+    
+    best_score = float("-inf")
+    best_i = 0
+    
+    for i, item in enumerate(pool):
+        score = item["score"]
+        if score > best_score or (score == best_score and len(item['history']) < len(pool[best_i]['history'])):
+            best_score = score
+            best_i = i
+    
+    return pool[best_i]
+
+def _worst_index(pool: List[Dict]) -> int:
+    # index of lowest score - optimized
+    if not pool:
+        raise ValueError("Empty pool")
+    
+    if len(pool) == 1:
+        return 0
+    
+    worst_score = float("inf")
+    worst_i = 0
+    
+    for i, item in enumerate(pool):
+        score = item["score"]
+        if score < worst_score or (score == worst_score and len(item['history']) > len(pool[worst_i]['history'])):
+            worst_score = score
+            worst_i = i
+    
+    return worst_i
+
 
 # TODO: consider the pairwise ordering
 async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_implementation_name, judge_type, judge_implementation_name, baseline_response_model_implementation_name=None, answer_position: str = "first"):
@@ -152,7 +264,7 @@ def extract_result_from_trajectories(question_list, init_response_list, category
     test_results = []
     for i, (question, response, category, original_score, original_explanation, baseline_response, trajectory_dict) in enumerate(zip(question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list, trajectories)):
 
-        trajectory = trajectory_dict["best_path"]
+        trajectory = trajectory_dict["history"]
         final_score, final_explanation, final_response, _ = trajectory[-1]
         exploration_length = len(trajectory) -1
         
@@ -243,6 +355,16 @@ def save_trajectories(trajectories, save_path, save_name):
     with open(save_path, "w") as f:
         json.dump(trajectories, f)
     logger.info(f"Trajectories saved to {save_path}")
+    logger.info("-"*100)
+
+def save_metrics(metrics, save_path, save_name):
+    # save the metrics
+    os.makedirs(save_path, exist_ok=True)
+    timestamp = time.strftime("%Y-%m-%d_%H:%M:%S")
+    save_path = os.path.join(save_path, f"{save_name}_{timestamp}.json")
+    with open(save_path, "w") as f:
+        json.dump(metrics, f)
+    logger.info(f"Metrics saved to {save_path}")
     logger.info("-"*100)
 
 
