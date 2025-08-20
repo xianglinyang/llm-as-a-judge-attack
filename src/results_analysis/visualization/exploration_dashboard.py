@@ -17,6 +17,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
 import warnings
+
 warnings.filterwarnings('ignore')
 
 # Set style
@@ -46,17 +47,38 @@ class ExplorationDashboard:
     def load_from_directory(self):
         """Load data from directory structure."""
         patterns = {
-            'ucb': ["**/ucb*.json", "**/*UCB*.json"],
+            'ucb_with_warmup': ["**/ucb_with_warmup*.json", "**/*UCB_WITH_WARMUP*.json"],
+            'ucb': ["**/ucb*.json", "**/*UCB*.json"],  # Will filter out with_warmup files later
             'random': ["**/random*.json", "**/*random*.json"], 
             'baseline': ["**/baseline*.json", "**/direct*.json"],
             'warmup': ["**/warmup*.json", "**/init_ucb_warmup*.json"]
         }
         
+        # Collect files by strategy
+        files_by_strategy = {}
         for strategy, pattern_list in patterns.items():
             files = []
             for pattern in pattern_list:
                 files.extend(glob.glob(os.path.join(self.metrics_dir, pattern), recursive=True))
+            files_by_strategy[strategy] = list(set(files))
+        
+        # Post-process to fix overlapping patterns from glob
+        # Remove ucb_with_warmup files from regular ucb category
+        if 'ucb' in files_by_strategy and 'ucb_with_warmup' in files_by_strategy:
+            original_ucb_count = len(files_by_strategy['ucb'])
             
+            # Filter: keep only files that don't contain 'with_warmup' anywhere in their path
+            files_by_strategy['ucb'] = [
+                f for f in files_by_strategy['ucb'] 
+                if 'with_warmup' not in f.lower()
+            ]
+            
+            removed_count = original_ucb_count - len(files_by_strategy['ucb'])
+            if removed_count > 0:
+                print(f"Filtered out {removed_count} files containing 'with_warmup' from ucb category")
+        
+        # Process files for each strategy
+        for strategy, files in files_by_strategy.items():
             if files:
                 self.strategies.add(strategy)
                 self.data[strategy] = []
@@ -84,7 +106,10 @@ class ExplorationDashboard:
                 
                 # Try to infer strategy from filename
                 filename = os.path.basename(file_path).lower()
-                if 'ucb' in filename:
+                if 'ucb_with_warmup' in filename:
+                    strategy = 'ucb_with_warmup'
+                elif 'ucb' in filename and 'ucb_with_warmup' not in filename:
+                    # Explicit check to avoid false positives
                     strategy = 'ucb'
                 elif 'random' in filename:
                     strategy = 'random'

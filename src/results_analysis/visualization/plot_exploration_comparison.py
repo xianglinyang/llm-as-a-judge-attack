@@ -22,18 +22,93 @@ from datetime import datetime
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
 
+# Strategy-specific styling for accessibility (color + marker combinations)
+STRATEGY_STYLES = {
+    'ucb': {'color': '#1f77b4', 'marker': 'o', 'linestyle': '-'},
+    'ucb_with_warmup': {'color': '#ff7f0e', 'marker': 's', 'linestyle': '-'},
+    'random': {'color': '#2ca02c', 'marker': '^', 'linestyle': '--'},
+    'holistic_rewrite': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
+    'improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
+    'simple_rewrite_holistic': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
+    'simple_rewrite_improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
+}
 
-def load_exploration_metrics(file_path: str) -> Dict[str, Any]:
+def get_strategy_style(strategy):
+    """Get consistent color, marker, and linestyle for a strategy."""
+    strategy_lower = strategy.lower()
+    return STRATEGY_STYLES.get(strategy_lower, {
+        'color': '#8c564b', 
+        'marker': 'p', 
+        'linestyle': '-'
+    })
+
+
+def load_exploration_metrics(file_path: str, exclude_filters: Dict[str, List[str]] = None) -> Dict[str, Any]:
     """Load exploration metrics from a JSON file."""
     with open(file_path, 'r') as f:
         data = json.load(f)
+    
+    # Skip warmup/init files - we only want exploration results
+    if 'warmup_summary' in data:
+        return None
+    
+    # Skip files that are clearly warmup/init related
+    filename = os.path.basename(file_path).lower()
+    if any(skip_term in filename for skip_term in ['warmup', 'init_ucb', 'init_linucb']):
+        return None
+    
+    # Apply exclude filters if provided
+    if exclude_filters:
+        for key, values in exclude_filters.items():
+            data_value = data.get(key, '')
+            data_value_str = str(data_value).lower()
+            
+            # Check if any of the exclude values match
+            for value in values:
+                value_lower = value.lower()
+                if data_value_str == value_lower or value_lower in data_value_str:
+                    return None
+    
     return data
+
+
+def parse_exclude_filters(exclude_string: str) -> Dict[str, List[str]]:
+    """Parse exclude filters from 'key1=value1,key2=value2' format.
+    
+    Supports multiple values for the same key:
+    'judge_model=model1,judge_model=model2' -> {'judge_model': ['model1', 'model2']}
+    """
+    if not exclude_string:
+        return {}
+    
+    filters = {}
+    pairs = exclude_string.split(',')
+    for pair in pairs:
+        if '=' in pair:
+            key, value = pair.split('=', 1)  # Split only on first =
+            key = key.strip()
+            value = value.strip()
+            
+            if key in filters:
+                filters[key].append(value)
+            else:
+                filters[key] = [value]
+        else:
+            print(f"Warning: Invalid filter format '{pair}'. Expected 'key=value'")
+    
+    return filters
 
 
 def find_exploration_files(metrics_dir: str) -> Dict[str, List[str]]:
     """Find and categorize exploration metrics files by strategy."""
     patterns = {
+        'ucb_with_warmup': [
+            os.path.join(metrics_dir, "**/ucb_with_warmup*.json"),
+            os.path.join(metrics_dir, "**/*ucb_with_warmup*.json"),
+            os.path.join(metrics_dir, "**/UCB_WITH_WARMUP*.json")
+        ],
         'ucb': [
+            # Use broad patterns, will filter out ucb_with_warmup files later
             os.path.join(metrics_dir, "**/ucb*.json"),
             os.path.join(metrics_dir, "**/*ucb*.json"),
             os.path.join(metrics_dir, "**/UCB*.json")
@@ -58,6 +133,26 @@ def find_exploration_files(metrics_dir: str) -> Dict[str, List[str]]:
         for pattern in patterns_list:
             files.extend(glob.glob(pattern, recursive=True))
         files_by_strategy[strategy] = sorted(list(set(files)))
+    
+    # Post-process to fix overlapping patterns
+    # Order matters: process specific patterns first, then general ones
+    
+    # 1. Remove ucb_with_warmup files from regular ucb category
+    if 'ucb' in files_by_strategy and 'ucb_with_warmup' in files_by_strategy:
+        original_ucb_count = len(files_by_strategy['ucb'])
+        
+        # Filter: keep only files that don't contain 'with_warmup' anywhere in their path
+        files_by_strategy['ucb'] = [
+            f for f in files_by_strategy['ucb'] 
+            if 'with_warmup' not in f.lower()
+        ]
+        
+        removed_count = original_ucb_count - len(files_by_strategy['ucb'])
+        if removed_count > 0:
+            print(f"Filtered out {removed_count} files containing 'with_warmup' from ucb category")
+    
+    # 2. Similarly handle any other overlapping patterns in the future
+    # (e.g., if we add ucb_without_warmup, etc.)
     
     return files_by_strategy
 
@@ -98,18 +193,14 @@ def plot_performance_comparison(metrics_by_strategy: Dict[str, List[Dict]], save
     """Plot performance comparison across strategies."""
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
     
-    colors = {
-        'ucb': 'steelblue', 
-        'random': 'orange', 
-        'holistic_rewrite': 'red',
-        'improve': 'brown'
-    }
-    
     for strategy, metrics_list in metrics_by_strategy.items():
         if not metrics_list:
             continue
-            
-        color = colors.get(strategy, 'gray')
+        
+        style = get_strategy_style(strategy)
+        color = style['color']
+        marker = style['marker']
+        linestyle = style['linestyle']
         
         # Aggregate metrics across multiple runs
         all_best_so_far = []
@@ -139,7 +230,8 @@ def plot_performance_comparison(metrics_by_strategy: Dict[str, List[Dict]], save
                     std_best.append(np.std(round_values))
             
             rounds = list(range(1, len(mean_best) + 1))
-            ax1.plot(rounds, mean_best, 'o-', color=color, label=f'{strategy.upper()} (n={len(all_best_so_far)})', linewidth=2)
+            ax1.plot(rounds, mean_best, marker=marker, linestyle=linestyle, color=color, 
+                    label=f'{strategy.upper()} (n={len(all_best_so_far)})', linewidth=2, markersize=6)
             if len(all_best_so_far) > 1:
                 ax1.fill_between(rounds, 
                                np.array(mean_best) - np.array(std_best), 
@@ -156,7 +248,8 @@ def plot_performance_comparison(metrics_by_strategy: Dict[str, List[Dict]], save
                     mean_pool.append(np.mean(round_values))
             
             rounds = list(range(1, len(mean_pool) + 1))
-            ax2.plot(rounds, mean_pool, 's-', color=color, label=f'{strategy.upper()}', linewidth=2)
+            ax2.plot(rounds, mean_pool, marker=marker, linestyle=linestyle, color=color, 
+                    label=f'{strategy.upper()}', linewidth=2, markersize=6)
         
         # Plot replacement ratio
         if all_replacement_ratio:
@@ -168,7 +261,8 @@ def plot_performance_comparison(metrics_by_strategy: Dict[str, List[Dict]], save
                     mean_replacement.append(np.mean(round_values))
             
             rounds = list(range(1, len(mean_replacement) + 1))
-            ax3.plot(rounds, mean_replacement, '^-', color=color, label=f'{strategy.upper()}', linewidth=2)
+            ax3.plot(rounds, mean_replacement, marker=marker, linestyle=linestyle, color=color, 
+                    label=f'{strategy.upper()}', linewidth=2, markersize=6)
         
         # Plot lift per 1k tokens
         if all_lift_per_1k_tokens:
@@ -180,7 +274,8 @@ def plot_performance_comparison(metrics_by_strategy: Dict[str, List[Dict]], save
                     mean_lift.append(np.mean(round_values))
             
             rounds = list(range(1, len(mean_lift) + 1))
-            ax4.plot(rounds, mean_lift, 'd-', color=color, label=f'{strategy.upper()}', linewidth=2)
+            ax4.plot(rounds, mean_lift, marker=marker, linestyle=linestyle, color=color, 
+                    label=f'{strategy.upper()}', linewidth=2, markersize=6)
     
     # Configure plots
     ax1.set_xlabel('Exploration Round')
@@ -226,22 +321,26 @@ def plot_ucb_specific_metrics(ucb_metrics_list: List[Dict], save_dir: str = None
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
     colors = plt.cm.viridis(np.linspace(0, 1, len(ucb_metrics_list)))
+    markers = ['o', 's', '^', 'D', 'v', 'p', '*', 'h', '+', 'x']  # Different markers for different runs
     
     for i, metrics in enumerate(ucb_metrics_list):
         ci_width = metrics.get('ci_width', [])
         ucb_gap = metrics.get('ucb_gap', [])
         
         label = f'UCB Run {i+1}'
+        marker = markers[i % len(markers)]  # Cycle through markers
         
         # Plot CI width
         if ci_width:
             rounds = list(range(1, len(ci_width) + 1))
-            ax1.plot(rounds, ci_width, 'o-', color=colors[i], label=label, alpha=0.8, linewidth=2)
+            ax1.plot(rounds, ci_width, marker=marker, linestyle='-', color=colors[i], 
+                    label=label, alpha=0.8, linewidth=2, markersize=6)
         
         # Plot UCB gap
         if ucb_gap:
             rounds = list(range(1, len(ucb_gap) + 1))
-            ax2.plot(rounds, ucb_gap, 's-', color=colors[i], label=label, alpha=0.8, linewidth=2)
+            ax2.plot(rounds, ucb_gap, marker=marker, linestyle='-', color=colors[i], 
+                    label=label, alpha=0.8, linewidth=2, markersize=6)
     
     # Configure CI width plot
     ax1.set_xlabel('Exploration Round')
@@ -330,39 +429,44 @@ def plot_final_performance_comparison(metrics_by_strategy: Dict[str, List[Dict]]
             token_eff_by_strategy[strategy].append(token_efficiencies[i])
     
     # Plot box plots - only for strategies that have data
-    strategies_ordered = ['UCB', 'RANDOM', 'HOLISTIC_REWRITE', 'IMPROVE']
-    colors = ['steelblue', 'orange', 'red', 'brown']
+    strategies_ordered = ['UCB', 'UCB_WITH_WARMUP', 'RANDOM', 'HOLISTIC_REWRITE', 'IMPROVE']
+    
+    # Hatching patterns for accessibility (color blindness)
+    hatching_patterns = ['', '///', '...', '+++', 'xxx', '|||', 'ooo']
     
     # Filter to only strategies with data
     available_strategies = []
     strategy_positions = []
-    strategy_colors = []
+    strategy_styles = []
     
-    for i, strategy in enumerate(strategies_ordered):
+    for strategy in strategies_ordered:
         if strategy in scores_by_strategy:
             available_strategies.append(strategy)
             strategy_positions.append(len(available_strategies) - 1)
-            strategy_colors.append(colors[i])
+            style = get_strategy_style(strategy.lower())
+            strategy_styles.append(style)
     
     # Plot box plots with correct positions
     for i, strategy in enumerate(available_strategies):
         pos = strategy_positions[i]
-        color = strategy_colors[i]
+        style = strategy_styles[i]
+        color = style['color']
+        hatch = hatching_patterns[i % len(hatching_patterns)]
         
         # Plot scores
         if strategy in scores_by_strategy:
-            ax1.boxplot(scores_by_strategy[strategy], positions=[pos], widths=0.6, 
-                       patch_artist=True, boxprops=dict(facecolor=color, alpha=0.7))
+            bp1 = ax1.boxplot(scores_by_strategy[strategy], positions=[pos], widths=0.6, 
+                             patch_artist=True, boxprops=dict(facecolor=color, alpha=0.7, hatch=hatch))
         
         # Plot pool means
         if strategy in pool_means_by_strategy:
-            ax2.boxplot(pool_means_by_strategy[strategy], positions=[pos], widths=0.6,
-                       patch_artist=True, boxprops=dict(facecolor=color, alpha=0.7))
+            bp2 = ax2.boxplot(pool_means_by_strategy[strategy], positions=[pos], widths=0.6,
+                             patch_artist=True, boxprops=dict(facecolor=color, alpha=0.7, hatch=hatch))
         
         # Plot token efficiency
         if strategy in token_eff_by_strategy:
-            ax3.boxplot(token_eff_by_strategy[strategy], positions=[pos], widths=0.6,
-                       patch_artist=True, boxprops=dict(facecolor=color, alpha=0.7))
+            bp3 = ax3.boxplot(token_eff_by_strategy[strategy], positions=[pos], widths=0.6,
+                             patch_artist=True, boxprops=dict(facecolor=color, alpha=0.7, hatch=hatch))
     
     # Configure plots with matching ticks and labels
     if available_strategies:
@@ -476,16 +580,30 @@ def main():
     parser.add_argument("--save_dir", type=str, help="Directory to save plots")
     parser.add_argument("--show_table", action="store_true", help="Show comparison summary table")
     parser.add_argument("--ucb_only", action="store_true", help="Plot only UCB-specific metrics")
+    parser.add_argument("--group_by_model", action="store_true", help="Group results by judge model")
+    parser.add_argument("--group_by_dataset", action="store_true", help="Group results by dataset")
+    parser.add_argument("--filter_model", type=str, help="Filter to specific judge model")
+    parser.add_argument("--filter_dataset", type=str, help="Filter to specific dataset")
+    parser.add_argument("--exclude", type=str, help="Exclude files matching criteria (format: 'key1=value1,key2=value2')")
     
     args = parser.parse_args()
+    
+    # Parse exclude filters
+    exclude_filters = parse_exclude_filters(args.exclude)
+    if exclude_filters:
+        print(f"Excluding files with: {exclude_filters}")
     
     # Collect metrics files
     if args.metrics_files:
         # Manually specified files - try to categorize by filename
-        files_by_strategy = {'ucb': [], 'random': [], 'holistic_rewrite': [], 'improve': []}
+        files_by_strategy = {'ucb': [], 'ucb_with_warmup': [], 'random': [], 'holistic_rewrite': [], 'improve': []}
         for file_path in args.metrics_files:
             filename = os.path.basename(file_path).lower()
-            if 'ucb' in filename:
+            # Check for specific patterns first, then more general ones
+            if 'ucb_with_warmup' in filename:
+                files_by_strategy['ucb_with_warmup'].append(file_path)
+            elif 'ucb' in filename and 'ucb_with_warmup' not in filename:
+                # Explicit check to avoid false positives
                 files_by_strategy['ucb'].append(file_path)
             elif 'random' in filename:
                 files_by_strategy['random'].append(file_path)
@@ -518,7 +636,11 @@ def main():
         strategy_metrics = []
         for file_path in files:
             try:
-                data = load_exploration_metrics(file_path)
+                data = load_exploration_metrics(file_path, exclude_filters)
+                if data is None:  # Skip warmup/init files or filtered files
+                    print(f"Skipping file: {os.path.basename(file_path)}")
+                    continue
+                    
                 metrics = extract_metrics_from_data(data)
                 if metrics:  # Only add if we extracted some metrics
                     strategy_metrics.append(metrics)

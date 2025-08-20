@@ -20,6 +20,24 @@ import seaborn as sns
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
 
+# Strategy-specific styling for accessibility (color + marker combinations)
+STRATEGY_STYLES = {
+    'ucb': {'color': '#1f77b4', 'marker': 'o', 'linestyle': '-'},
+    'ucb_with_warmup': {'color': '#ff7f0e', 'marker': 's', 'linestyle': '-'},
+    'random': {'color': '#2ca02c', 'marker': '^', 'linestyle': '--'},
+    'holistic_rewrite': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
+    'improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
+}
+
+def get_strategy_style(strategy):
+    """Get consistent color, marker, and linestyle for a strategy."""
+    strategy_lower = strategy.lower()
+    return STRATEGY_STYLES.get(strategy_lower, {
+        'color': '#8c564b', 
+        'marker': 'p', 
+        'linestyle': '-'
+    })
+
 
 def load_metrics(file_path: str) -> Dict[str, Any]:
     """Load metrics from JSON file."""
@@ -99,14 +117,14 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     ax7 = fig.add_subplot(gs[2, 1])
     ax8 = fig.add_subplot(gs[2, 2])
     
-    colors = {'UCB': 'steelblue', 'Random': 'orange'}
-    
     # 1. Best Score Evolution
     for name, metrics in [('UCB', ucb_metrics), ('Random', random_metrics)]:
         if 'best_so_far' in metrics:
+            style = get_strategy_style(name)
             rounds = list(range(1, len(metrics['best_so_far']) + 1))
-            ax1.plot(rounds, metrics['best_so_far'], 'o-', 
-                    color=colors[name], label=name, linewidth=2, markersize=4)
+            ax1.plot(rounds, metrics['best_so_far'], marker=style['marker'], 
+                    linestyle=style['linestyle'], color=style['color'], 
+                    label=name, linewidth=2, markersize=6)
     
     ax1.set_xlabel('Exploration Round')
     ax1.set_ylabel('Best Score So Far')
@@ -117,9 +135,11 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     # 2. Pool Quality
     for name, metrics in [('UCB', ucb_metrics), ('Random', random_metrics)]:
         if 'pool_mean' in metrics:
+            style = get_strategy_style(name)
             rounds = list(range(1, len(metrics['pool_mean']) + 1))
-            ax2.plot(rounds, metrics['pool_mean'], 's-', 
-                    color=colors[name], label=name, linewidth=2, markersize=4)
+            ax2.plot(rounds, metrics['pool_mean'], marker=style['marker'], 
+                    linestyle=style['linestyle'], color=style['color'], 
+                    label=name, linewidth=2, markersize=6)
     
     ax2.set_xlabel('Exploration Round')
     ax2.set_ylabel('Pool Mean Score')
@@ -131,8 +151,10 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     for name, metrics in [('UCB', ucb_metrics), ('Random', random_metrics)]:
         if 'replacement_ratio' in metrics:
             rounds = list(range(1, len(metrics['replacement_ratio']) + 1))
-            ax3.plot(rounds, metrics['replacement_ratio'], '^-', 
-                    color=colors[name], label=name, linewidth=2, markersize=4)
+            style = get_strategy_style(name)
+            ax3.plot(rounds, metrics['replacement_ratio'], marker=style['marker'], 
+                    linestyle=style['linestyle'], color=style['color'], 
+                    label=name, linewidth=2, markersize=6)
     
     ax3.set_xlabel('Exploration Round')
     ax3.set_ylabel('Replacement Ratio')
@@ -143,8 +165,10 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     # 4. UCB CI Width (UCB only)
     if 'ci_width' in ucb_metrics:
         rounds = list(range(1, len(ucb_metrics['ci_width']) + 1))
-        ax4.plot(rounds, ucb_metrics['ci_width'], 'o-', 
-                color=colors['UCB'], linewidth=2, markersize=4)
+        style = get_strategy_style('UCB')
+        ax4.plot(rounds, ucb_metrics['ci_width'], marker=style['marker'], 
+                linestyle=style['linestyle'], color=style['color'], 
+                linewidth=2, markersize=6)
         ax4.set_xlabel('Exploration Round')
         ax4.set_ylabel('CI Width')
         ax4.set_title('UCB Confidence Interval Width')
@@ -158,8 +182,10 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     # 5. UCB Gap (UCB only)
     if 'ucb_gap' in ucb_metrics:
         rounds = list(range(1, len(ucb_metrics['ucb_gap']) + 1))
-        ax5.plot(rounds, ucb_metrics['ucb_gap'], 's-', 
-                color=colors['UCB'], linewidth=2, markersize=4)
+        style = get_strategy_style('UCB')
+        ax5.plot(rounds, ucb_metrics['ucb_gap'], marker=style['marker'], 
+                linestyle=style['linestyle'], color=style['color'], 
+                linewidth=2, markersize=6)
         ax5.set_xlabel('Exploration Round')
         ax5.set_ylabel('UCB Gap')
         ax5.set_title('UCB Gap (Best - 2nd Best)')
@@ -174,8 +200,10 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     for name, metrics in [('UCB', ucb_metrics), ('Random', random_metrics)]:
         if 'lift_per_1k_tokens' in metrics:
             rounds = list(range(1, len(metrics['lift_per_1k_tokens']) + 1))
-            ax6.plot(rounds, metrics['lift_per_1k_tokens'], 'd-', 
-                    color=colors[name], label=name, linewidth=2, markersize=4)
+            style = get_strategy_style(name)
+            ax6.plot(rounds, metrics['lift_per_1k_tokens'], marker=style['marker'], 
+                    linestyle=style['linestyle'], color=style['color'], 
+                    label=name, linewidth=2, markersize=6)
     
     ax6.set_xlabel('Exploration Round')
     ax6.set_ylabel('Lift per 1K Tokens')
@@ -196,7 +224,8 @@ def plot_comparison(ucb_metrics: Dict[str, List[float]],
     
     if strategies:
         x_pos = np.arange(len(strategies))
-        bars = ax7.bar(x_pos, final_scores, color=[colors[s] for s in strategies], alpha=0.7)
+        strategy_colors = [get_strategy_style(s)['color'] for s in strategies]
+        bars = ax7.bar(x_pos, final_scores, color=strategy_colors, alpha=0.7)
         ax7.set_xlabel('Strategy')
         ax7.set_ylabel('Final Best Score')
         ax7.set_title('Final Performance')

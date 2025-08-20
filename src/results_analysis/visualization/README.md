@@ -5,7 +5,7 @@ This directory contains comprehensive visualization tools for analyzing UCB vs R
 ## Overview
 
 The visualization suite provides tools to:
-- **Compare exploration strategies** (UCB vs Random vs Baseline)
+- **Compare exploration strategies** (UCB vs UCB with warmup vs Random vs Baseline)
 - **Analyze UCB-specific metrics** (confidence intervals, gap evolution)
 - **Track performance evolution** over exploration rounds
 - **Evaluate token efficiency** and pool management
@@ -133,11 +133,14 @@ metrics/
 ```
 
 **Detection Patterns**:
-- **UCB**: `*ucb*.json`, `*UCB*.json`
+- **UCB**: `*ucb*.json`, `*UCB*.json` (excluding ucb_with_warmup)
+- **UCB with warmup**: `*ucb_with_warmup*.json`
 - **Random**: `*random*.json`
 - **Holistic Rewrite**: `*holistic*.json`
 - **Improve**: `*improve*.json`
 - **Warmup**: `*warmup*.json`, `*init_ucb_warmup*.json`
+
+**Note**: UCB with warmup uses pre-trained models for better initialization, while standard UCB starts with cold/fresh models, providing a comparison for understanding the impact of model warmup on UCB performance.
 
 ## Data Format
 
