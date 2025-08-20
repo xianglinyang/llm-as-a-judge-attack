@@ -458,7 +458,6 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
         pool_size: int = 2,
         baseline_response_list: Optional[List[str]] = None,
         replacement_margin: float = 0.0,
-        cold_start: bool = True,
         init_model_path: Optional[str] = None,
     ) -> Tuple[List[Dict], List[Dict]]:
         """
@@ -548,7 +547,7 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
         
         # ---- 3) Optional cold-start: probe each arm once per question from the init answer
         rounds_consumed = 0
-        if cold_start:
+        if init_model_path is None:
             # Build contexts from (question, init_answer)
             context_x = self.get_context_x_batch(question_list, init_response_list)
 
@@ -1049,9 +1048,14 @@ async def main(args):
 
     trajectories = []
     if args.test_mode == "ucb":
-        logger.info(f"Running single exploration...")
-        trajectories, metrics_list = await agent.batch_explore(question_list, init_response_list, original_score_list, original_explanation_list, args.Budget, args.pool_size, cold_start=args.cold_start, init_model_path=args.init_model_path, baseline_response_list=baseline_response_list)
+        logger.info(f"Running UCB exploration (cold start)...")
+        trajectories, metrics_list = await agent.batch_explore(question_list, init_response_list, original_score_list, original_explanation_list, args.Budget, args.pool_size, init_model_path=None, baseline_response_list=baseline_response_list)
         logger.info(f"UCB exploration finished.")
+        logger.info("-"*100)
+    elif args.test_mode == "ucb_with_warmup":
+        logger.info(f"Running UCB exploration with warmup...")
+        trajectories, metrics_list = await agent.batch_explore(question_list, init_response_list, original_score_list, original_explanation_list, args.Budget, args.pool_size, init_model_path=args.init_model_path, baseline_response_list=baseline_response_list)
+        logger.info(f"UCB exploration with warmup finished.")
         logger.info("-"*100)
     elif args.test_mode == "random":
         logger.info(f"Running random exploration...")
@@ -1082,7 +1086,7 @@ async def main(args):
         "budget": args.Budget,
         "pool_size": args.pool_size,
         "eval_num": eval_num,
-        "reward_type": args.reward_type,
+        "reward_type": args.reward_type if "ucb" in args.test_mode else "None",
         "alpha": args.alpha,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "time_taken": end_time - start_time,
@@ -1117,9 +1121,8 @@ if __name__ == "__main__":
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
     parser.add_argument("--lambda_reg", type=float, default=1.0)
     parser.add_argument("--n_features", type=int, default=384)
-    parser.add_argument("--cold_start", type=bool, default=False)
-    parser.add_argument("--init_model_path", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/models/")
-    parser.add_argument("--test_mode", type=str, default="ucb", choices=["ucb", "random"])
+    parser.add_argument("--init_model_path", type=str, default=None)
+    parser.add_argument("--test_mode", type=str, default="ucb", choices=["ucb", "ucb_with_warmup", "random"])
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
     parser.add_argument("--eval_num", type=int, default=805)
     parser.add_argument("--save_analysis_path", type=str, default="results/")
