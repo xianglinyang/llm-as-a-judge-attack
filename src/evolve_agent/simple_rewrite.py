@@ -30,7 +30,7 @@ class SimpleRewriteAgent(EvolveAgent):
     Evolve the response by modifying the style and tone of the response.
     Supports both pointwise and pairwise evaluation.
     '''
-    def __init__(self, llm_agent: BaseLLM, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "relative", answer_position: str = None, template_name: str = "holistic", domain: str = None):
+    def __init__(self, llm_agent: BaseLLM, judge_type: JudgeType, judge_model_backbone: str, reward_type: str = "absolute", answer_position: str = None, template_name: str = "holistic", domain: str = None):
         super().__init__(llm_agent, judge_type, judge_model_backbone, reward_type, answer_position)
         self.template_name = template_name
         self.domain = domain
@@ -48,9 +48,6 @@ class SimpleRewriteAgent(EvolveAgent):
         # extras / knobs:
         replacement_margin: float = 0.0,          # require s_new > s_worst + margin to enter pool
         record_rows: Optional[List[Dict[str, Any]]] = None,  # if provided, we append per-round logs
-        # convergence parameters:
-        convergence_patience: int = 3,            # stop if no improvement for N rounds
-        min_improvement_threshold: float = 0.001, # minimum improvement to count as progress
         **kwargs
         ) -> tuple[Dict[str, Any], Dict[str, List[float]]]:
         """
@@ -103,12 +100,8 @@ class SimpleRewriteAgent(EvolveAgent):
         }]
 
         best0 = float(original_score)  # baseline for lift computation
-        
-        # Early stopping tracking
-        no_improvement_count = 0
-        last_best_score = best0
 
-        # 3) Main loop with early stopping
+        # 3) Main loop
         for t in range(1, budget + 1):
             # (a) Choose a seed from pool
             seed_idx = _select_from_pool_uniform(pool)
@@ -170,17 +163,6 @@ class SimpleRewriteAgent(EvolveAgent):
             metrics_to_record["pool_mean"].append(pool_mean)
             metrics_to_record["replacement_ratio"].append(replacements / t)
             metrics_to_record["lift_per_1k_tokens"].append((best_now - best0) / max(1, total_tokens / 1000))
-            
-            # Early stopping check
-            if best_now > last_best_score + min_improvement_threshold:
-                last_best_score = best_now
-                no_improvement_count = 0
-            else:
-                no_improvement_count += 1
-                
-            if no_improvement_count >= convergence_patience:
-                logger.info(f"Early stopping at round {t}: no improvement for {convergence_patience} rounds")
-                break
 
         # 4) Return best item + metrics (so caller can save logs / plot)
         best_item = _best_item(pool)
@@ -196,9 +178,6 @@ class SimpleRewriteAgent(EvolveAgent):
         pool_size: int = 2,
         baseline_response_list: Optional[list[str]] = None,
         replacement_margin: float = 0.0,
-        # convergence parameters:
-        convergence_patience: int = 3,            # stop if no improvement for N rounds
-        min_improvement_threshold: float = 0.001, # minimum improvement to count as progress
     ) -> tuple[list[dict], list[dict]]:
         """
         Batched pool-based evolution loop (mirrors `explore`, but per-question in parallel).
@@ -239,10 +218,6 @@ class SimpleRewriteAgent(EvolveAgent):
         totals_tokens = [0 for _ in range(n)]
         replacements = [0 for _ in range(n)]
         best0_list = [float(s) for s in original_score_list]
-        
-        # Early stopping tracking per question
-        no_improvement_counts = [0 for _ in range(n)]
-        last_best_scores = [float(s) for s in original_score_list]
 
         for q, init_ans, s0, e0 in zip(question_list, init_response_list, original_score_list, original_explanation_list):
             item = {
@@ -262,14 +237,8 @@ class SimpleRewriteAgent(EvolveAgent):
                 "lift_per_1k_tokens": []
             })
 
-        # ---- 2) Main loop (T rounds) with early stopping
-        converged_questions = set()
-        
+        # ---- 2) Main loop (T rounds)
         for t in range(1, budget + 1):
-            # Skip if all questions have converged
-            if len(converged_questions) == n:
-                logger.info(f"All questions converged at round {t-1}")
-                break
             # (a) Choose one seed per question (uniform)
             seeds = []
             curr_answers = []
@@ -349,11 +318,8 @@ class SimpleRewriteAgent(EvolveAgent):
                     
                     replacements[i] += 1
 
-            # (e) Per-round metrics (per question) - optimized with cached calculations and convergence check
+            # (e) Per-round metrics (per question) - optimized with cached calculations
             for i in range(n):
-                if i in converged_questions:
-                    continue
-                    
                 pool = pools[i]
                 best_now, pool_mean = _get_pool_metrics(pool)
                 metrics = metrics_list[i]
@@ -361,18 +327,7 @@ class SimpleRewriteAgent(EvolveAgent):
                 metrics["pool_mean"].append(pool_mean)
                 metrics["replacement_ratio"].append(replacements[i] / t)
                 denom = max(1, totals_tokens[i] / 1000)
-                metrics["lift_per_1k_tokens"].append((best_now - last_best_scores[i]) / denom)
-                
-                # Early stopping check per question
-                if best_now > last_best_scores[i] + min_improvement_threshold:
-                    last_best_scores[i] = best_now
-                    no_improvement_counts[i] = 0
-                else:
-                    no_improvement_counts[i] += 1
-                    
-                if no_improvement_counts[i] >= convergence_patience:
-                    converged_questions.add(i)
-                    logger.info(f"Question {i} converged at round {t}: no improvement for {convergence_patience} rounds")
+                metrics["lift_per_1k_tokens"].append((best_now - best0_list[i]) / denom)
 
         # ---- 3) Collect best items + attach metrics
         best_items: list[dict] = []
