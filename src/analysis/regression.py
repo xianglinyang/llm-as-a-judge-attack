@@ -53,9 +53,39 @@ class RegressionModel:
     def linear_regression(self, X, y):
         # 1. convert the data to a pandas dataframe if current data is not a pandas dataframe
         X_df, y_series = self._convert_to_dataframe(X, y)
-        # 2. add a constant column to the data
+        
+        # 2. Clean data to fix dtype errors
+        # Drop rows with NaN values in target variable
+        mask = ~y_series.isna()
+        X_df = X_df[mask]
+        y_series = y_series[mask]
+        
+        # Ensure all columns are numeric
+        for col in X_df.columns:
+            X_df[col] = pd.to_numeric(X_df[col], errors='coerce')
+        
+        # Drop columns that are all NaN after conversion
+        X_df = X_df.dropna(axis=1, how='all')
+        
+        # Drop rows with any remaining NaN values
+        initial_rows = len(X_df)
+        X_df = X_df.dropna()
+        y_series = y_series[X_df.index]
+        
+        if len(X_df) < initial_rows:
+            logger.warning(f"Dropped {initial_rows - len(X_df)} rows with NaN values")
+        
+        if len(X_df) == 0:
+            raise ValueError("No valid data remaining after cleaning")
+        
+        # Ensure target variable is numeric
+        y_series = pd.to_numeric(y_series, errors='coerce')
+        
+        logger.info(f"Cleaned data shape: X={X_df.shape}, y={y_series.shape}")
+        
+        # 3. add a constant column to the data
         # X_with_constant = sm.add_constant(X_df)
-        # 3. create and fit the OLS (Ordinary Least Squares) model
+        # 4. create and fit the OLS (Ordinary Least Squares) model
         model = sm.OLS(y_series, X_df)
         results = model.fit()
         # 4. print the comprehensive summary
@@ -142,13 +172,13 @@ if __name__ == "__main__":
     # reward_type = None
     data_dir = "/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories"
     data_type = "trajectory"
-    reward_type = "absolute"
+    reward_type = "relative"
 
     dataset_name = "AlpacaEval"
     judge_type = "pointwise"
-    judge_backbone = "gemini-2.0-flash"
+    judge_backbone = "gemini-2.5-flash"
     response_model_name = "gpt-4.1-mini"
-    helper_model_name = "gemini-1.5-flash-8b"
+    helper_model_name = "gpt-4.1-nano"
 
     coefficients, p_values, feature_names = get_feature_model_correlation(data_dir, data_type, ["AlpacaEval", "ArenaHard", "MTBench"], reward_type, judge_type, judge_backbone, response_model_name, helper_model_name)
 

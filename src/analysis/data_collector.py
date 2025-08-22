@@ -267,14 +267,14 @@ def load_analysis_data_from_trajectories(trajectory_dir: str, dataset_name: str,
         data = json.load(f)
     trajectories = data['trajectories']
     for full_trajectory in trajectories:
-        trajectory = full_trajectory['best_path']
+        trajectory = full_trajectory['history']
         len_trajectory = len(trajectory)
-        if len_trajectory <= 2:
+        if len_trajectory <= 1:
             continue
-        init_step = trajectory[1]
+        init_step = trajectory[0]
         init_score, _, init_answer, _ = init_step
         current_strategy_list = []
-        for step in trajectory[2:]:
+        for step in trajectory[1:]:
             score, _, answer, _ = step
             current_strategy_list.append(step[3])
             strategy_list.append(current_strategy_list.copy())
