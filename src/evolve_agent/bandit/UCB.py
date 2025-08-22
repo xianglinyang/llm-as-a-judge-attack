@@ -1092,8 +1092,16 @@ async def main(args):
         "time_taken": end_time - start_time,
     }
     analysis.update(meta_info)
+    
+    # Add category information to trajectories for better visualization support
+    enhanced_trajectories = []
+    for i, (trajectory, category) in enumerate(zip(trajectories, category_list)):
+        enhanced_trajectory = trajectory.copy()
+        enhanced_trajectory["category"] = category
+        enhanced_trajectories.append(enhanced_trajectory)
+    
     trajectories_to_save = meta_info.copy()
-    trajectories_to_save.update({"trajectories": trajectories})
+    trajectories_to_save.update({"trajectories": enhanced_trajectories})
 
     metrics_to_save = meta_info.copy()
     metrics_to_save.update({"metrics": metrics_list})

@@ -351,8 +351,9 @@ async def main(args):
         llm_agent,
         judge_type,
         args.judge_backbone,
+        answer_position=args.answer_position,
         template_name=args.template_name,
-        domain=args.domain
+        domain=args.domain,
     )
     logger.info(f"Agent initialized with config: {agent.get_agent_info()}")
     logger.info("-" * 100)
@@ -450,8 +451,15 @@ async def main(args):
     }
     analysis.update(meta_info)
 
+    # Add category information to trajectories for better visualization support
+    enhanced_trajectories = []
+    for i, (trajectory, category) in enumerate(zip(trajectories, category_list)):
+        enhanced_trajectory = trajectory.copy()
+        enhanced_trajectory["category"] = category
+        enhanced_trajectories.append(enhanced_trajectory)
+
     trajectories_to_save = meta_info.copy()
-    trajectories_to_save.update({"trajectories": trajectories})
+    trajectories_to_save.update({"trajectories": enhanced_trajectories})
 
     metrics_to_save = meta_info.copy()
     metrics_to_save.update({"metrics": metrics_list})
