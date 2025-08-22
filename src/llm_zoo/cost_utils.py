@@ -6,6 +6,7 @@ MODEL_PRICING = {
     # OpenAI models
     "gpt-4.1": {"input": 2.00, "output": 8.00},
     "gpt-4.1-mini": {"input": 0.40, "output": 1.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
     "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     "gpt-4.1-nano": {"input": 0.10, "output": 0.40},
     "o4-mini": {"input": 1.10, "output": 4.40},
@@ -42,6 +43,7 @@ MODEL_PRICING = {
     "openai/o3-pro": {"input": 20.00*1.05, "output": 80.00*1.05}, # 1.05 is the tax rate
     "openai/o4-mini-high": {"input": 1.10*1.05, "output": 4.40*1.05},
     "openai/o4-mini": {"input": 1.10*1.05, "output": 4.40*1.05},
+    "openai/gpt-4o": {"input": 2.50*1.05, "output": 10.00*1.05},
     "openai/gpt-4.1": {"input": 2.00*1.05, "output": 8.00*1.05},
     "openai/gpt-4.1-mini": {"input": 0.40*1.05, "output": 1.60*1.05},
     "openai/gpt-4.1-nano": {"input": 0.10*1.05, "output": 0.40*1.05},

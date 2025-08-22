@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 openai_models = [
     "gpt-4.1",
     "gpt-4.1-mini",
+    "gpt-4o",
     "gpt-4o-mini",
     "gpt-4.1-nano",
     "o4-mini",
@@ -54,11 +55,11 @@ openrouter_models = [
     "openai/gpt-4.1",
     "openai/gpt-4.1-mini",
     "openai/gpt-4.1-nano",
+    "openai/gpt-4o",
     "openai/o1",
     "openai/o1-mini",
     "openai/chatgpt-4o-latest",
     "openai/gpt-4o-mini",
-    "openai/gpt-4o",
     "openai/gpt-4-turbo",
     "openai/gpt-3.5-turbo",
 
@@ -133,6 +134,7 @@ implementation_to_name = {
     "gpt-4.1": "gpt-4.1",
     "gpt-4.1-mini": "gpt-4.1-mini",
     "gpt-4o-mini": "gpt-4o-mini",
+    "gpt-4o": "gpt-4o",
     "gpt-4.1-nano": "gpt-4.1-nano",
     "o4-mini": "o4-mini",
     "o3-mini": "o3-mini",

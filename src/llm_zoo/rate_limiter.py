@@ -188,9 +188,9 @@ def rate_limited_async_call(config: RateLimitConfig):
 
 # Predefined configurations for common use cases
 OPENAI_RATE_LIMIT = RateLimitConfig(
-    max_calls=5000,
-    calls_per_minute=10000,  # OpenAI's default rate limit
-    calls_per_second=1000,
+    max_calls=1000,
+    calls_per_minute=1000,  # OpenAI's default rate limit
+    calls_per_second=10,
     delay_between_calls=0.0
 )
 
