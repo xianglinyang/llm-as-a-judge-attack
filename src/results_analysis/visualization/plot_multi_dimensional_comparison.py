@@ -30,26 +30,6 @@ from itertools import product
 plt.style.use('seaborn-v0_8')
 sns.set_palette("husl")
 
-# Strategy-specific styling for accessibility (color + marker combinations)
-STRATEGY_STYLES = {
-    'ucb': {'color': '#1f77b4', 'marker': 'o', 'linestyle': '-'},
-    'ucb_with_warmup': {'color': '#ff7f0e', 'marker': 's', 'linestyle': '-'},
-    'random': {'color': '#2ca02c', 'marker': '^', 'linestyle': '--'},
-    'holistic_rewrite': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
-    'improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
-    'simple_rewrite_holistic': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
-    'simple_rewrite_improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
-}
-
-def get_strategy_style(strategy):
-    """Get consistent color, marker, and linestyle for a strategy."""
-    strategy_lower = strategy.lower()
-    return STRATEGY_STYLES.get(strategy_lower, {
-        'color': '#8c564b', 
-        'marker': 'p', 
-        'linestyle': '-'
-    })
-
 def load_exploration_metrics(file_path: str, exclude_filters: Dict[str, List[str]] = None) -> Dict[str, Any]:
     """Load exploration metrics from a JSON file."""
     with open(file_path, 'r') as f:
@@ -138,7 +118,7 @@ def extract_metadata_from_data(data: Dict[str, Any]) -> Dict[str, str]:
     return metadata
 
 def extract_metrics_from_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
-    """Extract relevant metrics from loaded data."""
+    """Extract and calculate metrics from loaded data."""
     metrics = {}
     
     # Handle different data structures
@@ -146,25 +126,50 @@ def extract_metrics_from_data(data: Dict[str, Any]) -> Dict[str, List[float]]:
         # Multiple questions - aggregate metrics
         all_metrics = data['metrics']
         if all_metrics:
-            # Get all metric keys from first question
-            sample_metrics = all_metrics[0]
-            for key in sample_metrics:
-                if isinstance(sample_metrics[key], list):
-                    # Aggregate across questions (take mean at each round)
-                    max_rounds = max(len(m.get(key, [])) for m in all_metrics)
+            # Extract basic recorded metrics (aggregate across questions)
+            basic_metrics = ['best_so_far', 'pool_mean', 'replacement_ratio', 'lift_per_1k_tokens', 'ci_width', 'ucb_gap']
+            
+            for metric_name in basic_metrics:
+                if metric_name in all_metrics[0]:
+                    # Aggregate across questions by taking mean at each round
+                    max_rounds = max(len(m.get(metric_name, [])) for m in all_metrics)
                     aggregated = []
                     for round_idx in range(max_rounds):
-                        round_values = [m.get(key, [])[round_idx] 
-                                      for m in all_metrics 
-                                      if round_idx < len(m.get(key, []))]
+                        round_values = []
+                        for question_metrics in all_metrics:
+                            if metric_name in question_metrics and round_idx < len(question_metrics[metric_name]):
+                                round_values.append(question_metrics[metric_name][round_idx])
                         if round_values:
                             aggregated.append(np.mean(round_values))
-                    metrics[key] = aggregated
+                    if aggregated:
+                        metrics[metric_name] = aggregated
+            
+            # Calculate stability (coefficient of variation across questions)
+            if len(all_metrics) > 1:
+                # Final scores for stability calculation
+                final_scores = []
+                for question_metrics in all_metrics:
+                    if 'best_so_far' in question_metrics and question_metrics['best_so_far']:
+                        final_scores.append(question_metrics['best_so_far'][-1])
+                
+                if len(final_scores) > 1:
+                    # Stability (coefficient of variation) - single value, not per-round
+                    cv = np.std(final_scores) / np.mean(final_scores) if np.mean(final_scores) != 0 else 0
+                    # Make it a constant series for plotting compatibility
+                    if 'best_so_far' in metrics:
+                        metrics['stability'] = [cv] * len(metrics['best_so_far'])
+                    else:
+                        metrics['stability'] = [cv]
     else:
-        # Single question or already aggregated
+        # Legacy format or single aggregated metrics
         for key, value in data.items():
             if isinstance(value, list) and key in ['best_so_far', 'pool_mean', 'ci_width', 'ucb_gap', 'replacement_ratio', 'lift_per_1k_tokens']:
                 metrics[key] = value
+        
+        # Calculate stability for legacy format
+        if 'best_so_far' in metrics:
+            # For single run, stability is 0
+            metrics['stability'] = [0.0] * len(metrics['best_so_far'])
     
     return metrics
 
@@ -193,7 +198,9 @@ def categorize_data_by_groups(all_data: List[Dict[str, Any]], group_by: List[str
     
     return dict(grouped_data)
 
-def plot_grouped_performance_comparison(grouped_data: Dict[Tuple, List[Dict]], group_by: List[str], save_dir: str = None):
+
+
+def plot_grouped_performance_comparison(grouped_data: Dict[Tuple, List[Dict]], group_by: List[str], report_metric: str = "best_so_far", save_dir: str = None):
     """Plot performance comparison grouped by specified dimensions."""
     
     # Determine subplot layout
@@ -216,7 +223,25 @@ def plot_grouped_performance_comparison(grouped_data: Dict[Tuple, List[Dict]], g
     elif n_cols == 1:
         axes = axes.reshape(-1, 1)
     
-    # Strategy styling for accessibility (no need for static colors anymore)
+    # Color-blind friendly styling (consistent with other visualization files)
+    strategy_styles = {
+        'ucb': {'color': '#1f77b4', 'marker': 'o', 'linestyle': '-'},
+        'ucb_with_warmup': {'color': '#ff7f0e', 'marker': 's', 'linestyle': '-'},
+        'random': {'color': '#2ca02c', 'marker': '^', 'linestyle': '--'},
+        'simple_rewrite_holistic': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
+        'simple_rewrite_improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
+        'holistic_rewrite': {'color': '#d62728', 'marker': 'D', 'linestyle': '-.'},
+        'improve': {'color': '#9467bd', 'marker': 'v', 'linestyle': ':'},
+        # Fallback styles for other dimensions
+        'relative': {'color': '#17becf', 'marker': 'o', 'linestyle': '-'},
+        'absolute': {'color': '#bcbd22', 'marker': 's', 'linestyle': '-'},
+        'pointwise': {'color': '#e377c2', 'marker': 'o', 'linestyle': '-'},
+        'pairwise': {'color': '#7f7f7f', 'marker': 's', 'linestyle': '-'}
+    }
+    
+    def get_style(key: str) -> dict:
+        """Get color-blind friendly style for a given key."""
+        return strategy_styles.get(key, {'color': '#8c564b', 'marker': 'p', 'linestyle': '-'})
     
     for idx, (group_key, group_items) in enumerate(grouped_data.items()):
         row = idx // n_cols
@@ -238,40 +263,47 @@ def plot_grouped_performance_comparison(grouped_data: Dict[Tuple, List[Dict]], g
             if not metrics_list:
                 continue
                 
-            style = get_strategy_style(strategy)
-            color = style['color']
-            marker = style['marker']
-            linestyle = style['linestyle']
+            style = get_style(strategy)
             
-            # Aggregate best_so_far across runs
-            all_best_so_far = []
+            # Aggregate specified metric across runs
+            all_metric_values = []
             for metrics in metrics_list:
-                if 'best_so_far' in metrics and metrics['best_so_far']:
-                    all_best_so_far.append(metrics['best_so_far'])
+                if report_metric in metrics and metrics[report_metric]:
+                    all_metric_values.append(metrics[report_metric])
             
-            if all_best_so_far:
-                max_rounds = max(len(run) for run in all_best_so_far)
-                mean_best = []
-                std_best = []
+            if all_metric_values:
+                max_rounds = max(len(run) for run in all_metric_values)
+                mean_values = []
+                std_values = []
                 
                 for round_idx in range(max_rounds):
-                    round_values = [run[round_idx] for run in all_best_so_far if round_idx < len(run)]
+                    round_values = [run[round_idx] for run in all_metric_values if round_idx < len(run)]
                     if round_values:
-                        mean_best.append(np.mean(round_values))
-                        std_best.append(np.std(round_values))
+                        mean_values.append(np.mean(round_values))
+                        std_values.append(np.std(round_values))
                 
-                rounds = list(range(1, len(mean_best) + 1))
-                ax.plot(rounds, mean_best, marker=marker, linestyle=linestyle, color=color, 
-                       label=f'{strategy} (n={len(all_best_so_far)})', linewidth=2, markersize=6)
+                rounds = list(range(1, len(mean_values) + 1))
+                ax.plot(rounds, mean_values, 
+                       marker=style['marker'], 
+                       color=style['color'], 
+                       linestyle=style['linestyle'],
+                       label=f'{strategy} (n={len(all_metric_values)})', 
+                       linewidth=2, markersize=6)
                 
-                if len(all_best_so_far) > 1:
+                if len(all_metric_values) > 1:
                     ax.fill_between(rounds, 
-                                   np.array(mean_best) - np.array(std_best), 
-                                   np.array(mean_best) + np.array(std_best), 
-                                   color=color, alpha=0.2)
+                                   np.array(mean_values) - np.array(std_values), 
+                                   np.array(mean_values) + np.array(std_values), 
+                                   color=style['color'], alpha=0.15)
         
         ax.set_xlabel('Exploration Round')
-        ax.set_ylabel('Best Score So Far')
+        
+        # Set appropriate y-axis labels for different metrics
+        if report_metric == 'stability':
+            ax.set_ylabel('Stability (CV)')
+        else:
+            ax.set_ylabel(report_metric.replace('_', ' ').title())
+        
         ax.grid(True, alpha=0.3)
         ax.legend(fontsize=8)
     
@@ -283,15 +315,23 @@ def plot_grouped_performance_comparison(grouped_data: Dict[Tuple, List[Dict]], g
     
     plt.tight_layout()
     
+    # Set appropriate title for different metrics
+    if report_metric == 'stability':
+        metric_title = 'Stability (CV)'
+    else:
+        metric_title = report_metric.replace("_", " ").title()
+    
+    fig.suptitle(f'{metric_title} Comparison Grouped by {" | ".join(group_by)}', fontsize=14)
+    
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         group_name = "_".join(group_by)
-        plt.savefig(os.path.join(save_dir, f'grouped_performance_{group_name}.png'), dpi=300, bbox_inches='tight')
-        plt.savefig(os.path.join(save_dir, f'grouped_performance_{group_name}.pdf'), bbox_inches='tight')
+        plt.savefig(os.path.join(save_dir, f'grouped_performance_{group_name}_{report_metric}.png'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(save_dir, f'grouped_performance_{group_name}_{report_metric}.pdf'), bbox_inches='tight')
     
     plt.show()
 
-def plot_heatmap_comparison(grouped_data: Dict[Tuple, List[Dict]], group_by: List[str], save_dir: str = None):
+def plot_heatmap_comparison(grouped_data: Dict[Tuple, List[Dict]], group_by: List[str], report_metric: str = "best_so_far", save_dir: str = None):
     """Create heatmap showing final performance across different dimensions."""
     
     if len(group_by) != 2:
@@ -334,17 +374,17 @@ def plot_heatmap_comparison(grouped_data: Dict[Tuple, List[Dict]], group_by: Lis
             
             if strategy_items:
                 # Calculate mean final performance
-                final_scores = []
+                final_values = []
                 for item in strategy_items:
                     metrics = item['metrics']
-                    if 'best_so_far' in metrics and metrics['best_so_far']:
-                        final_scores.append(metrics['best_so_far'][-1])
+                    if report_metric in metrics and metrics[report_metric]:
+                        final_values.append(metrics[report_metric][-1])
                 
-                if final_scores:
-                    heatmap_data[dim2_idx, dim1_idx] = np.mean(final_scores)
+                if final_values:
+                    heatmap_data[dim2_idx, dim1_idx] = np.mean(final_values)
         
-        # Plot heatmap
-        im = ax.imshow(heatmap_data, cmap='viridis', aspect='auto')
+        # Plot heatmap with color-blind friendly colormap
+        im = ax.imshow(heatmap_data, cmap='viridis', aspect='auto')  # viridis is color-blind friendly
         ax.set_title(f'{strategy.upper()}', fontsize=12)
         ax.set_xlabel(group_by[0].replace('_', ' ').title())
         ax.set_ylabel(group_by[1].replace('_', ' ').title())
@@ -367,15 +407,23 @@ def plot_heatmap_comparison(grouped_data: Dict[Tuple, List[Dict]], group_by: Lis
     
     plt.tight_layout()
     
+    # Set appropriate title for different metrics
+    if report_metric == 'stability':
+        metric_title = 'Stability (CV)'
+    else:
+        metric_title = report_metric.replace("_", " ").title()
+    
+    plt.suptitle(f'{metric_title} Heatmap by {" vs ".join(group_by)}', fontsize=16)
+    
     if save_dir:
         os.makedirs(save_dir, exist_ok=True)
         group_name = "_".join(group_by)
-        plt.savefig(os.path.join(save_dir, f'heatmap_{group_name}.png'), dpi=300, bbox_inches='tight')
-        plt.savefig(os.path.join(save_dir, f'heatmap_{group_name}.pdf'), bbox_inches='tight')
+        plt.savefig(os.path.join(save_dir, f'heatmap_{group_name}_{report_metric}.png'), dpi=300, bbox_inches='tight')
+        plt.savefig(os.path.join(save_dir, f'heatmap_{group_name}_{report_metric}.pdf'), bbox_inches='tight')
     
     plt.show()
 
-def plot_summary_table_by_groups(grouped_data: Dict[Tuple, List[Dict]], group_by: List[str]):
+def plot_summary_table_by_groups(grouped_data: Dict[Tuple, List[Dict]], group_by: List[str], report_metric: str = "best_so_far"):
     """Create summary table showing performance across groups."""
     
     # Collect data for table
@@ -394,28 +442,20 @@ def plot_summary_table_by_groups(grouped_data: Dict[Tuple, List[Dict]], group_by
             if not metrics_list:
                 continue
             
-            # Calculate statistics
-            final_scores = []
-            final_pool_means = []
-            final_token_effs = []
+            # Calculate statistics for specified metric
+            final_values = []
             
             for metrics in metrics_list:
-                if 'best_so_far' in metrics and metrics['best_so_far']:
-                    final_scores.append(metrics['best_so_far'][-1])
-                if 'pool_mean' in metrics and metrics['pool_mean']:
-                    final_pool_means.append(metrics['pool_mean'][-1])
-                if 'lift_per_1k_tokens' in metrics and metrics['lift_per_1k_tokens']:
-                    final_token_effs.append(metrics['lift_per_1k_tokens'][-1])
+                if report_metric in metrics and metrics[report_metric]:
+                    final_values.append(metrics[report_metric][-1])
             
             row = group_dict.copy()
             row.update({
                 'strategy': strategy,
                 'runs': len(metrics_list),
-                'mean_final_score': np.mean(final_scores) if final_scores else np.nan,
-                'std_final_score': np.std(final_scores) if final_scores else np.nan,
-                'mean_pool_mean': np.mean(final_pool_means) if final_pool_means else np.nan,
-                'mean_token_eff': np.mean(final_token_effs) if final_token_effs else np.nan,
-                'max_final_score': np.max(final_scores) if final_scores else np.nan
+                f'mean_{report_metric}': np.mean(final_values) if final_values else np.nan,
+                f'std_{report_metric}': np.std(final_values) if final_values else np.nan,
+                f'max_{report_metric}': np.max(final_values) if final_values else np.nan
             })
             table_data.append(row)
     
@@ -426,8 +466,8 @@ def plot_summary_table_by_groups(grouped_data: Dict[Tuple, List[Dict]], group_by
         print("No data available for summary table")
         return df
     
-    # Sort by group dimensions then by mean final score
-    sort_cols = group_by + ['mean_final_score']
+    # Sort by group dimensions then by mean report metric
+    sort_cols = group_by + [f'mean_{report_metric}']
     df = df.sort_values(sort_cols, ascending=[True]*len(group_by) + [False])
     
     print(f"\n{'='*120}")
@@ -455,6 +495,8 @@ def main():
                        help="Type of plot to generate")
     parser.add_argument("--filter", type=str, help="Filter data (e.g., 'dataset=AlpacaEval,strategy=ucb')")
     parser.add_argument("--exclude", type=str, help="Exclude files matching criteria (format: 'key1=value1,key2=value2')")
+    parser.add_argument("--report_metric", type=str, default="best_so_far", 
+                       help="Metric to visualize. Options: best_so_far, pool_mean, replacement_ratio, lift_per_1k_tokens, ci_width, ucb_gap, stability")
     
     args = parser.parse_args()
     
@@ -547,16 +589,16 @@ def main():
     
     # Show summary table
     if args.show_table:
-        summary_df = plot_summary_table_by_groups(grouped_data, group_by)
+        summary_df = plot_summary_table_by_groups(grouped_data, group_by, args.report_metric)
     
     # Generate plots
     if args.plot_type in ["line", "both"]:
-        print(f"\nGenerating line plots grouped by {group_by}...")
-        plot_grouped_performance_comparison(grouped_data, group_by, args.save_dir)
+        print(f"\nGenerating line plots for {args.report_metric} grouped by {group_by}...")
+        plot_grouped_performance_comparison(grouped_data, group_by, args.report_metric, args.save_dir)
     
     if args.plot_type in ["heatmap", "both"] and len(group_by) == 2:
-        print(f"\nGenerating heatmap for {group_by}...")
-        plot_heatmap_comparison(grouped_data, group_by, args.save_dir)
+        print(f"\nGenerating heatmap for {args.report_metric} grouped by {group_by}...")
+        plot_heatmap_comparison(grouped_data, group_by, args.report_metric, args.save_dir)
     elif args.plot_type in ["heatmap", "both"] and len(group_by) != 2:
         print("Heatmap requires exactly 2 grouping dimensions. Skipping heatmap.")
     
