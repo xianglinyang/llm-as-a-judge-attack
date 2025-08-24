@@ -137,7 +137,7 @@ def _worst_index(pool: List[Dict]) -> int:
 
 
 # TODO: consider the pairwise ordering
-async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_implementation_name, judge_type, judge_implementation_name, baseline_response_model_implementation_name=None, answer_position: str = "first"):
+async def prepare_dataset_for_exploration(data_dir, dataset_name, response_model_implementation_name, judge_type, judge_implementation_name, baseline_response_model_implementation_name=None, answer_position: str = None):
     '''
     Prepare the dataset for exploration. Consider the judge type and judge backbone.
     Args:
