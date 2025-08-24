@@ -365,6 +365,14 @@ class TrajectoryLoader:
         
         return filtered
     
+    def exclude_trajectories(self, 
+                             trajectories: List[LoadedTrajectory],
+                             **filters) -> List[LoadedTrajectory]:
+        """
+        Exclude trajectories by metadata criteria.
+        """
+        return [traj for traj in trajectories if not should_exclude_trajectory(traj, filters)]
+    
     def group_trajectories_by(self, 
                              trajectories: List[LoadedTrajectory],
                              group_by: str) -> Dict[str, List[LoadedTrajectory]]:
