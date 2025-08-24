@@ -115,7 +115,7 @@ class RegressionModel:
         pass
 
 
-def get_feature_model_correlation(data_dir, data_type, dataset_list, reward_type, judge_type, judge_backbone, response_model_name, helper_model_name):
+def get_feature_model_correlation(data_dir, data_type, dataset_list, reward_type, judge_type, judge_backbone, response_model_name, helper_model_name, baseline_response_model_name, answer_position):
 
     init_df_list = []
     modified_df_list = []
@@ -125,7 +125,7 @@ def get_feature_model_correlation(data_dir, data_type, dataset_list, reward_type
 
     for dataset_name in dataset_list:
         # 1. extract features
-        init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type)
+        init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type, baseline_response_model_name, answer_position)
 
         # 2. collect the data
         init_df_list.append(init_df)
@@ -176,25 +176,10 @@ if __name__ == "__main__":
 
     dataset_name = "AlpacaEval"
     judge_type = "pointwise"
-    judge_backbone = "gemini-2.5-flash"
+    judge_backbone = "qwen3-235b-a22b-2507"
     response_model_name = "gpt-4.1-mini"
     helper_model_name = "gpt-4.1-nano"
+    baseline_response_model_name = None
+    answer_position = None
 
-    coefficients, p_values, feature_names = get_feature_model_correlation(data_dir, data_type, ["AlpacaEval", "ArenaHard", "MTBench"], reward_type, judge_type, judge_backbone, response_model_name, helper_model_name)
-
-    # # 1. extract features
-    # init_df, modified_df, init_y, modified_y, feature_names = extract_features_for_analysis(data_dir, data_type, dataset_name, judge_type, judge_backbone, response_model_name, helper_model_name, reward_type)
-
-    # # 2. get the change difference
-    # X_change = modified_df - init_df
-    # y_change = modified_y - init_y
-
-    # # 3. show the first 5 rows of the data
-    # logger.info("Sample X_change (first 5 rows):")
-    # logger.info(X_change.head())
-    # logger.info("Sample y_change (first 5 rows):")
-    # logger.info(y_change.head())
-
-    # # 2. fit the regression model
-    # regression_model = RegressionModel()
-    # regression_model.linear_regression(X_change, y_change)
+    coefficients, p_values, feature_names = get_feature_model_correlation(data_dir, data_type, ["AlpacaEval", "ArenaHard", "MTBench"], reward_type, judge_type, judge_backbone, response_model_name, helper_model_name, baseline_response_model_name, answer_position)
