@@ -345,9 +345,9 @@ class ArenaHardAutoModel(JudgeModelABC):
         return score, feedback
     
     async def batch_get_score(self, q_list, response1_list, response2_list) -> tuple[list[int], list[str]]:
-        formatted_prompts = [ARENA_HARD_AUTO_PROMPT.format(input_q, response1, response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
+        formatted_prompts = [ARENA_HARD_AUTO_PROMPT.format(question=input_q, answer_a=response1, answer_b=response2) for input_q, response1, response2 in zip(q_list, response1_list, response2_list)]
         start_time = time.time()
-        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=ARENA_HARD_AUTO_SYSTEM_PROMPT, return_cost=True)
         end_time = time.time()
         scores = []
         feedbacks = []
@@ -538,29 +538,29 @@ if __name__ == "__main__":
     target_response_1 = "Renewable energy technologies are poised to revolutionize urban landscapes, with advanced solar roadways potentially generating electricity while supporting vehicle traffic. Vertical wind turbines integrated into skyscrapers could become more efficient, potentially producing up to 30% of a building's energy needs. While some experts are skeptical about total urban energy independence, emerging technologies like transparent solar panels and bio-responsive energy systems suggest we're approaching a transformative period in sustainable urban design."
     target_response_2 = "ChatGPT: Sustainable urban design is a critical component of urban planning, aiming to create cities that are environmentally friendly, socially equitable, and economically viable. This approach considers the long-term impact of urban development on the natural environment, human well-being, and economic prosperity. Key principles include reducing carbon emissions, conserving water resources, promoting biodiversity, and ensuring access to green spaces. By integrating sustainable practices into urban design, cities can achieve a balance between economic growth and environmental sustainability, fostering a more resilient and livable urban environment."
 
-    # ------------------------------------------------------------
-    # Test Pointwise Model
-    # ------------------------------------------------------------
-    gpt = load_judge_model(JudgeType.POINTWISE, "gpt-4.1")
-    gemini = load_judge_model(JudgeType.POINTWISE, "gemini-1.5-flash")
+    # # ------------------------------------------------------------
+    # # Test Pointwise Model
+    # # ------------------------------------------------------------
+    # gpt = load_judge_model(JudgeType.POINTWISE, "gpt-4.1")
+    # gemini = load_judge_model(JudgeType.POINTWISE, "gemini-1.5-flash")
 
-    s1, e1 = gpt.get_score(question, target_response_1)
-    s2, e2 = gemini.get_score(question, target_response_2)
-    print(f"GPT score: {s1}, feedback: {e1}")
-    print(f"Gemini score: {s2}, feedback: {e2}")
+    # s1, e1 = gpt.get_score(question, target_response_1)
+    # s2, e2 = gemini.get_score(question, target_response_2)
+    # print(f"GPT score: {s1}, feedback: {e1}")
+    # print(f"Gemini score: {s2}, feedback: {e2}")
 
-    # ------------------------------------------------------------
-    # Test Pairwise Model
-    # ------------------------------------------------------------
-    pairwise_judge = load_judge_model(JudgeType.PAIRWISE, "gemini-2.0-flash")
+    # # ------------------------------------------------------------
+    # # Test Pairwise Model
+    # # ------------------------------------------------------------
+    # pairwise_judge = load_judge_model(JudgeType.PAIRWISE, "gemini-2.0-flash")
 
-    s1, e1 = pairwise_judge.get_score(question, target_response_1, target_response_2)
-    print(f"Pairwise score given by gemini-2.0-flash: {s1}, feedback: {e1}")
+    # s1, e1 = pairwise_judge.get_score(question, target_response_1, target_response_2)
+    # print(f"Pairwise score given by gemini-2.0-flash: {s1}, feedback: {e1}")
 
     # ------------------------------------------------------------
     # Test Arena Hard Auto Model
     # ------------------------------------------------------------
-    arena_hard_auto_judge = load_judge_model(JudgeType.ARENA_HARD_AUTO, "gemini-2.0-flash")
+    arena_hard_auto_judge = load_judge_model(JudgeType.ARENA_HARD_AUTO, "gemini-2.5-flash")
     s1, e1 = arena_hard_auto_judge.get_score(question, target_response_1, target_response_2)
     print(f"ArenaHardAuto score given by gemini-2.0-flash: {s1}, feedback: {e1}")
 
