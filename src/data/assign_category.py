@@ -36,7 +36,8 @@ template='''Given a question, please categorize it to one of the following categ
 Please output the generated content in a json format, for example:
 ```json
 {{
-"category": "integer from 1 to 7" // specific category, such as 1 for "Computer Science & Programming"
+"category": "integer from 1 to 7" // specific category, such as 1 for "Computer Science & Programming",
+"question_type": "Subjective" or "Objective"
 }}
 ```
 
@@ -57,7 +58,7 @@ async def assign_category(save_dir, dataset_name, assign_model_name="gpt-4.1-min
     metadata = load_metadata(save_dir, dataset_name)
     
     # check if the dataset is already assigned category
-    if "category" in metadata[0]:
+    if "question_type" in metadata[0]:
         logger.info(f"Dataset {dataset_name} is already assigned category")
         return metadata
     
@@ -70,9 +71,12 @@ async def assign_category(save_dir, dataset_name, assign_model_name="gpt-4.1-min
     for item, response in zip(metadata, responses):
         try:
             category = int(str2json(response)["category"])
+            question_type = str2json(response)["question_type"]
             item["category"] = CATEGORIES[category - 1]
+            item["question_type"] = question_type
         except:
             item["category"] = "None"
+            item["question_type"] = "None"
     
     save_path = os.path.join(save_dir, dataset_name, f"metadata.json")
     with open(save_path, "w") as f:
@@ -97,7 +101,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
-    parser.add_argument("--assign_model_name", type=str, default="gpt-4o-mini")
+    parser.add_argument("--assign_model_name", type=str, default="openai/gpt-5-nano")
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
     args = parser.parse_args()
 
