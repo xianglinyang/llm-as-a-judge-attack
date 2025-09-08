@@ -290,6 +290,12 @@ class AlpacaEvalModel(JudgeModelABC):
         total_input_tokens = 0
         total_output_tokens = 0
         for call_result in call_results:
+            if call_result is None:
+                # Handle failed API calls
+                scores.append(0)
+                feedbacks.append("Error: API call failed - no response received")
+                continue
+                
             response = call_result.response
             cost = call_result.cost
             input_tokens = call_result.input_tokens
@@ -355,6 +361,12 @@ class ArenaHardAutoModel(JudgeModelABC):
         total_input_tokens = 0
         total_output_tokens = 0
         for call_result in call_results:
+            if call_result is None:
+                # Handle failed API calls
+                scores.append(0)
+                feedbacks.append("Error: API call failed - no response received")
+                continue
+                
             response = call_result.response
             cost = call_result.cost
             input_tokens = call_result.input_tokens
@@ -418,6 +430,12 @@ class MTBenchModel(JudgeModelABC):
         total_input_tokens = 0
         total_output_tokens = 0
         for call_result in call_results:
+            if call_result is None:
+                # Handle failed API calls
+                scores.append(0)
+                responses.append("Error: API call failed - no response received")
+                continue
+                
             response = call_result.response
             cost = call_result.cost
             input_tokens = call_result.input_tokens
@@ -498,6 +516,12 @@ class MLRBenchModel(JudgeModelABC):
         total_input_tokens = 0
         total_output_tokens = 0
         for call_result in call_results:
+            if call_result is None:
+                # Handle failed API calls
+                scores.append(0)
+                explanations.append("Error: API call failed - no response received")
+                continue
+                
             response = call_result.response
             cost = call_result.cost
             input_tokens = call_result.input_tokens
