@@ -23,7 +23,7 @@ from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
 
-from src.results_analysis.trajectory_loader import (
+from src.results_analysis.results_loader.trajectory_loader import (
     TrajectoryLoader, LoadedTrajectory
 )
 from src.llm_evaluator import load_judge_model, get_judge_type

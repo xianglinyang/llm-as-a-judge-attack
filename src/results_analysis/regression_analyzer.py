@@ -9,12 +9,12 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Tuple
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from scipy import stats
 
-from src.results_analysis.trajectory_loader import load_trajectory_directory, LoadedTrajectory, TrajectoryItem
+from src.results_analysis.results_loader.trajectory_loader import load_trajectory_directory, LoadedTrajectory, TrajectoryItem
 from src.feature_analysis.feature_extractor import get_feature_names, extract_features
 
 logger = logging.getLogger(__name__)

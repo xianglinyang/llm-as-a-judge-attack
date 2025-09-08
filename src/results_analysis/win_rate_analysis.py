@@ -41,7 +41,7 @@ import argparse
 
 logger = logging.getLogger(__name__)
 
-from src.results_analysis.trajectory_loader import load_trajectory_directory, parse_filter_criteria, parse_exclude_criteria
+from src.results_analysis.results_loader.trajectory_loader import load_trajectory_directory, parse_filter_criteria, parse_exclude_criteria
 
 # Group trajectories by experimental settings (excluding strategy)
 def get_setting_key(metadata):

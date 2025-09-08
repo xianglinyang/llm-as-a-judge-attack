@@ -16,8 +16,8 @@ import sys
 import argparse
 from collections import defaultdict
 
-from src.results_analysis.trajectory_loader import TrajectoryLoader, LoadedTrajectory
-from src.results_analysis.data_loader import DataLoader
+from src.results_analysis.results_loader.trajectory_loader import TrajectoryLoader, LoadedTrajectory
+from src.results_analysis.results_loader.data_loader import DataLoader
 from src.data.assign_category import CATEGORIES
 
 # Define objective and subjective categories based on question types

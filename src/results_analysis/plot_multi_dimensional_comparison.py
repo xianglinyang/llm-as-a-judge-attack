@@ -17,14 +17,12 @@ import argparse
 import json
 import os
 import glob
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Tuple
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 import pandas as pd
-from itertools import product
 
 # Set style
 plt.style.use('seaborn-v0_8')

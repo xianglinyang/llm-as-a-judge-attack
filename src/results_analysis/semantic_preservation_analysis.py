@@ -27,8 +27,8 @@ from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-from src.results_analysis.trajectory_loader import TrajectoryLoader, LoadedTrajectory
-from src.results_analysis.data_loader import DataLoader
+from src.results_analysis.results_loader.trajectory_loader import TrajectoryLoader, LoadedTrajectory
+from src.results_analysis.results_loader.data_loader import DataLoader
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings("ignore")
