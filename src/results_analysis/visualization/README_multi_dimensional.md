@@ -347,3 +347,11 @@ python plot_multi_dimensional_comparison.py \
 ```
 
 This provides a comprehensive framework for understanding how different models, datasets, and configurations affect the performance of your exploration strategies! 📊✨
+
+
+# sh
+```console
+~$ python plot_multi_dimensional_comparison.py --group_by judge_model,dataset,judge_type --show_table --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_model=gpt-5
+
+~$ python plot_aggregated_performance.py --plot_type 2x2 --report_metric best_so_far --group_by judge_model,dataset,judge_type --show_table --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_model=gpt-5
+```

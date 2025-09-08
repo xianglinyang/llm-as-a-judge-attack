@@ -38,7 +38,33 @@ def load_exploration_metrics(file_path: str, exclude_filters: Dict[str, List[str
     # Apply exclude filters if provided
     if exclude_filters:
         for key, values in exclude_filters.items():
-            data_value = data.get(key, '')
+            # Map metadata field names to actual JSON field names
+            field_mapping = {
+                'llm_agent': 'llm_agent_name',
+                'judge_model': 'judge_backbone',  # or 'judge_model_name'
+                'response_model': 'response_model_name',
+                'baseline_model': 'baseline_response_model_name',
+                'dataset': 'dataset_name',
+                'budget': 'budget',  # or 'Budget'
+                'pool_size': 'pool_size',
+                'judge_type': 'judge_type',
+                'reward_type': 'reward_type',
+                'strategy': 'strategy',
+                'alpha': 'alpha',
+                'lambda_reg': 'lambda_reg'
+            }
+            
+            # Get the actual field name from the mapping, or use the key directly if not mapped
+            actual_field = field_mapping.get(key, key)
+            
+            # Handle special cases where there might be multiple possible field names
+            if actual_field == 'judge_backbone':
+                data_value = data.get('judge_backbone', data.get('judge_model_name', ''))
+            elif actual_field == 'budget':
+                data_value = data.get('budget', data.get('Budget', ''))
+            else:
+                data_value = data.get(actual_field, '')
+            
             data_value_str = str(data_value).lower()
             
             # Check if any of the exclude values match
@@ -210,7 +236,7 @@ def plot_grouped_performance_comparison(grouped_data: Dict[Tuple, List[Dict]], g
         return
     
     # Calculate subplot grid
-    n_cols = min(3, n_groups)
+    n_cols = min(4, n_groups)
     n_rows = (n_groups + n_cols - 1) // n_cols
     
     fig, axes = plt.subplots(n_rows, n_cols, figsize=(6*n_cols, 5*n_rows))
