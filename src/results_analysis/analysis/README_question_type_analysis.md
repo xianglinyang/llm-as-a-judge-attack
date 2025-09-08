@@ -11,20 +11,6 @@ This module generates tables similar to:
 | **BITE (ours)**  | **48.7%**       | **75.1%**        | +26.4 | **0.62**         | **0.80**          | +0.18 |
 | Random           | 22.3%           | 48.7%            | +26.4 | 0.44             | 0.62              | +0.18 |
 
-## Category Mapping
-
-Based on the 7-category classification system:
-
-### Subjective Categories (1, 4, 5, 6)
-- **Computer Science & Programming** (1)
-- **Business & Finance** (4)  
-- **Writing & Communication** (5)
-- **Social & Daily Life** (6)
-
-### Objective Categories (2, 3)
-- **Mathematics & Statistics** (2)
-- **Science & Engineering** (3)
-
 ## Metrics
 
 ### ASR (Attack Success Rate)
@@ -33,7 +19,7 @@ Based on the 7-category classification system:
 - **Range**: 0-100%
 - **Higher is better**
 
-### SLTR (Score Lift Transfer Rate)
+### SLTR (Score Lift)
 - **Definition**: Average score improvement after attack
 - **Formula**: `mean(final_scores - initial_scores)`
 - **Range**: Depends on judge scoring scale
@@ -143,36 +129,14 @@ print(multi_analysis)
 
 ```bash
 # Basic usage
-python examples/generate_comparison_table.py \
-    --trajectory_dir /path/to/trajectories \
-    --judge_backbone gpt-4 \
-    --dataset_name AlpacaEval
+# Generate question type analysis using data_loader integration
+python -m src.results_analysis.question_type_analysis --question_type_analysis --dataset_name AlpacaEval --judge_type pointwise
 
-# With detailed analysis and output file
-python examples/generate_comparison_table.py \
-    --trajectory_dir /path/to/trajectories \
-    --judge_backbone gpt-4 \
-    --dataset_name AlpacaEval \
-    --detailed \
-    --output_file results.md
+# Include instruction samples report
+python question_type_analysis.py --question_type_analysis --instruction_samples --dataset_name AlpacaEval
 
-# Group by strategy
-python examples/generate_comparison_table.py \
-    --trajectory_dir /path/to/trajectories \
-    --group_by strategy \
-    --baseline_group random
-
-# Group by judge model
-python examples/generate_comparison_table.py \
-    --trajectory_dir /path/to/trajectories \
-    --group_by judge_backbone \
-    --dataset_name AlpacaEval
-
-# Multi-group analysis
-python examples/generate_comparison_table.py \
-    --trajectory_dir /path/to/trajectories \
-    --multi_group \
-    --output_file multi_analysis.md
+# Specify custom data directory
+python question_type_analysis.py --question_type_analysis --data_dir /path/to/data
 ```
 
 ## Configuration
