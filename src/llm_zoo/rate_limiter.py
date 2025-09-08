@@ -188,23 +188,23 @@ def rate_limited_async_call(config: RateLimitConfig):
 
 # Predefined configurations for common use cases
 OPENAI_RATE_LIMIT = RateLimitConfig(
-    max_calls=1000,
-    calls_per_minute=1000,  # OpenAI's default rate limit
-    calls_per_second=10,
+    max_calls=7000,
+    calls_per_minute=7000,  # OpenAI's default rate limit
+    calls_per_second=500,
     delay_between_calls=0.0
 )
 
 OPENROUTER_RATE_LIMIT = RateLimitConfig(
-    max_calls=5000,
-    calls_per_minute=10000,  # OpenAI's default rate limit
-    calls_per_second=1000,
+    max_calls=7000,
+    calls_per_minute=7000,  # OpenAI's default rate limit
+    calls_per_second=500,
     delay_between_calls=0.0
 )
 
 GEMINI_RATE_LIMIT = RateLimitConfig(
-    max_calls=5000,
-    calls_per_minute=10000,  # Gemini's default rate limit
-    calls_per_second=1000,
+    max_calls=7000,
+    calls_per_minute=7000,  # Gemini's default rate limit
+    calls_per_second=500,
     delay_between_calls=0.0
 )
 
