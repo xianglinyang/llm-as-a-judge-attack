@@ -29,6 +29,7 @@ gemini_models = [
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash-preview-05-20",
     "gemini-2.5-pro-preview-06-05",
+    "gemini-2.5-pro-preview-03-25",
     "gemini-2.0-flash-lite",
     "gemini-2.0-flash",
     "gemini-1.5-flash",
@@ -69,12 +70,14 @@ openrouter_models = [
     "google/gemini-2.5-flash",
     "google/gemini-2.5-pro",
     "google/gemini-2.5-pro-preview",
+    "google/gemini-2.5-pro-preview-03-25",
 
     # DeepSeek
     "deepseek/deepseek-r1-0528",
     "deepseek/deepseek-chat-v3-0324",
 
     # anthropic
+    "anthropic/claude-opus-4.1"
     "anthropic/claude-opus-4",
     "anthropic/claude-sonnet-4",
     "anthropic/claude-3.7-sonnet",
@@ -85,6 +88,7 @@ openrouter_models = [
 
     # qwen
     # 3.0
+    "qwen/qwen3-max"
     "qwen/qwen3-235b-a22b-thinking-2507",
     "qwen/qwen3-235b-a22b-2507",
     "qwen/qwen3-30b-a3b-instruct-2507",
@@ -99,6 +103,9 @@ openrouter_models = [
     "meta-llama/llama-3.1-70b-instruct",
     "meta-llama/llama-3-70b-instruct",
     "meta-llama/llama-3.1-405b-instruct",
+
+    # X-AI
+    "x-ai/grok-4",
 ]
 
 dashscope_models = [
@@ -150,6 +157,7 @@ implementation_to_name = {
     "gemini-2.5-flash-lite-preview-06-17": "gemini-2.5-flash-lite-preview-06-17",
     "gemini-2.5-flash-preview-05-20": "gemini-2.5-flash-preview-05-20",
     "gemini-2.5-pro-preview-06-05": "gemini-2.5-pro-preview-06-05",
+    "gemini-2.5-pro-preview-03-25": "gemini-2.5-pro-preview-03-25",
     "gemini-2.0-flash-lite": "gemini-2.0-flash-lite",
     "gemini-2.0-flash": "gemini-2.0-flash",
     "gemini-1.5-flash": "gemini-1.5-flash",
@@ -187,12 +195,14 @@ implementation_to_name = {
     "google/gemini-2.5-flash": "gemini-2.5-flash",
     "google/gemini-2.5-pro": "gemini-2.5-pro",
     "google/gemini-2.5-pro-preview": "gemini-2.5-pro-preview",
+    "google/gemini-2.5-pro-preview-03-25": "gemini-2.5-pro-preview-03-25",
 
     # OpenRouter DeepSeek models
     "deepseek/deepseek-r1-0528": "deepseek-r1-0528",
     "deepseek/deepseek-chat-v3-0324": "deepseek-chat-v3-0324",
 
     # OpenRouter Anthropic models
+    "anthropic/claude-opus-4.1": "claude-opus-4.1",
     "anthropic/claude-opus-4": "claude-opus-4",
     "anthropic/claude-sonnet-4": "claude-sonnet-4",
     "anthropic/claude-3.7-sonnet": "claude-3.7-sonnet",
@@ -205,6 +215,7 @@ implementation_to_name = {
     "qwen/qwen-turbo": "qwen-turbo",
     "qwen/qwen-plus": "qwen-plus",
     "qwen/qwen-max": "qwen-max",
+    "qwen/qwen3-max": "qwen3-max",
     "qwen/qwen3-235b-a22b-thinking-2507": "qwen3-235b-a22b-thinking-2507",
     "qwen/qwen3-235b-a22b-2507": "qwen3-235b-a22b-2507",
     "qwen/qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b-instruct-2507",
@@ -233,6 +244,7 @@ implementation_to_name = {
     "qwen3-235b-a22b-instruct-2507": "qwen3-235b-a22b-instruct-2507",
     "qwen3-235b-a22b": "qwen3-235b-a22b",
     "qwen3-32b": "qwen3-32b",
+    "qwen3-max": "qwen3-max",
     "qwen3-30b-a3b-thinking-2507": "qwen3-30b-a3b-thinking-2507",
     "qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b-instruct-2507",
     "qwen3-30b-a3b": "qwen3-30b-a3b",
@@ -240,6 +252,9 @@ implementation_to_name = {
     "qwen3-8b": "qwen3-8b",
     "qwq-plus": "qwq-plus",
     "qwq-32b": "qwq-32b",
+
+    # OpenRouter X-AI models
+    "x-ai/grok-4": "grok-4",
 }
 
 def is_huggingface_model(model_name: str) -> bool:
