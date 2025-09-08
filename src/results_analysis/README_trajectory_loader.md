@@ -205,44 +205,6 @@ python trajectory_loader.py --filter "strategy=ucb" --exclude "judge_backbone=gp
 
 # Complex filtering (multiple criteria + exclude)
 python trajectory_loader.py --filter "strategy=ucb,judge_type=pointwise" --exclude "dataset_name=AlpacaEval" --show_summary
-
-# Add section for compare
-## Comparing Methods
-
-Use --compare to compare two methods **in the same experimental settings**:
-
-```bash
-python trajectory_loader.py --compare ucb,random
-```
-
-This will:
-1. Find trajectories for both methods
-2. Group them by experimental settings (dataset, judge, budget, etc.)
-3. Only compare methods that have the same experimental setup
-4. Calculate win rates per question across all matching settings
-
-Example output:
-```
-Found 3 common experimental settings
-
-Comparing ucb vs random across 3 experimental settings
-Total common questions: 150
-Wins/Ties/Losses (for ucb): 90/30/30
-Win rate for ucb: 75.00%
-Average score difference (ucb - random): 1.250
-
-Breakdown by experimental setting:
-  Setting 1: AlpacaEval | gpt-4 | pointwise | budget=20 | pool_size=3
-    Questions: 50 | W/T/L: 30/10/10 | Win rate: 75.0%
-  Setting 2: UltraFeedback | gpt-4 | pointwise | budget=20 | pool_size=3  
-    Questions: 50 | W/T/L: 30/10/10 | Win rate: 75.0%
-  Setting 3: AlpacaEval | gpt-3.5-turbo | pointwise | budget=10 | pool_size=2
-    Questions: 50 | W/T/L: 30/10/10 | Win rate: 75.0%
-```
-
-### Test the loader
-```bash
-python test_trajectory_loader.py
 ```
 
 ## Filter and Exclusion Syntax
