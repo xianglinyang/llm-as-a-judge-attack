@@ -1,3 +1,23 @@
+# Main Results
+
+1. best so far
+2. win rate per prompt
+3. pool mean
+4. replacement ratio
+
+5. ci width
+6. ucb gap
+
+
+```bash
+python -m src.results_analysis.visualization.plot_multi_dimensional_comparison.py --group_by judge_model,dataset,judge_type --show_table --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_model=gpt-5 --metric best_so_far
+```
+
+```bash
+python -m src.results_analysis.analysis.win_rate_analysis --compare random,simple_rewrite_improve
+```
+
+
 # Semantic
 ```bash
 # Basic analysis
@@ -31,7 +51,6 @@ python src/results_analysis/analysis/semantic_preservation_analysis.py --compreh
 
 
 # Question Types
-
 
 ```bash
 # Generate question type analysis using data_loader integration
@@ -74,4 +93,7 @@ python src/results_analysis/transfer_analysis.py \
 ```
 
 
-# 
+# Feature Analysis
+```bash
+python -m src.results_analysis.analysis.regression_analyzer --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_backbone=gpt-5
+```

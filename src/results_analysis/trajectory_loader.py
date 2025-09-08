@@ -614,37 +614,6 @@ def should_include_trajectory(trajectory: LoadedTrajectory, filter_criteria: Dic
     return True  # All criteria matched
 
 
-# def load_trajectories_from_directory(directory: str, filter_criteria: Optional[Dict[str, List[str]]] = None, exclude_criteria: Optional[Dict[str, List[str]]] = None, show_summary: bool = True) -> List[LoadedTrajectory]:
-    
-#     # Parse filter and exclude criteria
-#     filter_criteria = parse_filter_criteria(filter_criteria)
-#     exclude_criteria = parse_exclude_criteria(exclude_criteria)
-    
-#     if filter_criteria:
-#         print(f"Filtering trajectories with: {filter_criteria}")
-#     if exclude_criteria:
-#         print(f"Excluding trajectories with: {exclude_criteria}")
-    
-#     # Load trajectories
-#     trajectories = load_trajectory_directory(directory)
-    
-#     # Apply advanced filter criteria (AND logic - all criteria must match)
-#     if filter_criteria:
-#         original_count = len(trajectories)
-#         trajectories = [traj for traj in trajectories if should_include_trajectory(traj, filter_criteria)]
-#         filtered_count = original_count - len(trajectories)
-#         print(f"Filter removed {filtered_count} files, {len(trajectories)} remaining")
-    
-#     # Apply exclusion criteria (OR logic - any criteria match means exclude)
-#     if exclude_criteria:
-#         original_count = len(trajectories)
-#         trajectories = [traj for traj in trajectories if not should_exclude_trajectory(traj, exclude_criteria)]
-#         excluded_count = original_count - len(trajectories)
-#         print(f"Excluded {excluded_count} files, {len(trajectories)} remaining")
-    
-#     print(f"Loaded {len(trajectories)} trajectory files")
-
-
 def show_summary(trajectories: List[LoadedTrajectory]):
     print("\n=== SUMMARY ===")
     for traj in trajectories:
