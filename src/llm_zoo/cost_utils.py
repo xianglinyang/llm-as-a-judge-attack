@@ -23,6 +23,7 @@ MODEL_PRICING = {
     "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
     "gemini-2.5-flash-preview-05-20": {"input": 0.10, "output": 0.40},
     "gemini-2.5-pro-preview-06-05": {"input": 1.25, "output": 10.00},
+    "gemini-2.5-pro-preview-03-25": {"input": 1.25, "output": 10.00},
     "gemini-2.0-flash-lite": {"input": 0.075, "output": 0.30},
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
     "gemini-1.5-flash": {"input": 0.075, "output": 0.30},
@@ -58,6 +59,7 @@ MODEL_PRICING = {
     "google/gemini-2.5-flash": {"input": 0.30*1.05, "output": 2.50*1.05},
     "google/gemini-2.5-pro": {"input": 1.25*1.05, "output": 10.00*1.05},
     "google/gemini-2.5-pro-preview": {"input": 1.25*1.05, "output": 10.00*1.05},
+    "google/gemini-2.5-pro-preview-03-25": {"input": 1.25*1.05, "output": 10.00*1.05},
 
     "deepseek/deepseek-r1-0528": {"input": 0.18*1.05, "output": 0.72*1.05},
     "deepseek/deepseek-chat-v3-0324": {"input": 0.18*1.05, "output": 0.72*1.05},
@@ -76,11 +78,15 @@ MODEL_PRICING = {
     "qwen/qwen-turbo": {"input": 0.05*1.05, "output": 0.20*1.05},
     "qwen/qwen-plus": {"input": 0.40*1.05, "output": 1.20*1.05},
     "qwen/qwen-max": {"input": 1.60*1.05, "output": 6.40*1.05},
+    "qwen/qwen3-max": {"input": 1.20*1.05, "output": 6.00*1.05},
     "qwen/qwen3-235b-a22b-thinking-2507": {"input": 0.078*1.05, "output": 0.312*1.05},
     "qwen/qwen3-235b-a22b-2507": {"input": 0.078*1.05, "output": 0.312*1.05},
     "qwen/qwen3-30b-a3b-instruct-2507": {"input": 0.20*1.05, "output": 0.80*1.05},
 
     "meta-llama/llama-3.3-70b-instruct": {"input": 0.038*1.05, "output": 0.12*1.05},
+
+    # X-AI
+    "x-ai/grok-4": {"input": 3.00*1.05, "output": 15.00*1.05},
 }
 
 class CallResult(NamedTuple):
