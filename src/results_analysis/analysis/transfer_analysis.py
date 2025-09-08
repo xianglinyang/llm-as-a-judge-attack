@@ -13,13 +13,12 @@ Metrics:
 - Attack Success Rate (ASR) on target vs. source.
 - Transfer Effectiveness: How well attacks generalize across judges
 '''
-
+import os
+import sys
 import numpy as np
-import pandas as pd
 import asyncio
 import logging
 import argparse
-import os
 from typing import List, Dict, Any, Tuple, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,6 +28,8 @@ from src.results_analysis.trajectory_loader import (
 )
 from src.llm_evaluator import load_judge_model, get_judge_type
 from src.data.data_utils import load_dataset
+from src.llm_zoo.api_zoo import get_model_name
+from src.logging_utils import setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ class TransferAnalyzer:
         Returns:
             TransferResult containing all metrics
         """
-        logger.info(f"Analyzing transfer from {source_judge} to {target_judge}")
+        logger.info(f"Analyzing transfer from {get_model_name(source_judge)} to {get_model_name(target_judge)}")
         
         # Build filter criteria
         filter_criteria = {"strategy": strategy}
@@ -212,10 +213,10 @@ class TransferAnalyzer:
             filter_criteria["dataset_name"] = dataset_name
             
         # Load source judge trajectories
-        source_trajectories = self.load_trajectories_for_judge(source_judge, filter_criteria)
+        source_trajectories = self.load_trajectories_for_judge(get_model_name(source_judge), filter_criteria)
         
         if not source_trajectories:
-            raise ValueError(f"No trajectories found for source judge {source_judge}")
+            raise ValueError(f"No trajectories found for source judge {get_model_name(source_judge)}")
             
         # Extract questions and responses
         questions, initial_responses, final_responses, source_initial_scores, source_final_scores = self.extract_responses_and_questions(source_trajectories)
@@ -228,10 +229,10 @@ class TransferAnalyzer:
         # Get target judge scores
         logger.info("Evaluating with target judge...")
         target_initial_scores, _ = await self.evaluate_responses_with_judge(
-            questions, initial_responses, target_judge, judge_type, answer_position, baseline_model_name
+            questions, initial_responses, target_judge, judge_type, answer_position, get_model_name(baseline_model_name)
         )
         target_final_scores, _ = await self.evaluate_responses_with_judge(
-            questions, final_responses, target_judge, judge_type, answer_position, baseline_model_name
+            questions, final_responses, target_judge, judge_type, answer_position, get_model_name(baseline_model_name)
         )
         
         # Convert to numpy arrays
@@ -255,8 +256,8 @@ class TransferAnalyzer:
         
         
         return TransferResult(
-            source_judge=source_judge,
-            target_judge=target_judge,
+            source_judge=get_model_name(source_judge),
+            target_judge=get_model_name(target_judge),
             source_asr=source_asr,
             target_asr=target_asr,
             transfer_asr=transfer_asr,
@@ -350,75 +351,72 @@ async def main():
                         default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories",
                         help="Directory containing trajectory files")
     parser.add_argument("--source_judge", type=str, required=True,
-                       help="Source judge model name")
+                       help="Source judge model implementation name")
     parser.add_argument("--target_judge", type=str, required=True,
-                       help="Target judge model name")
+                       help="Target judge model implementation name")
     parser.add_argument("--strategy", type=str, default="ucb",
                        help="Attack strategy to analyze (default: ucb)")
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval",
                        help="Dataset to filter by (default: AlpacaEval)")
     parser.add_argument("--judge_type", type=str, default="pointwise",
                        help="Judge type (default: pointwise)")
-    parser.add_argument("--output_file", type=str, default=None,
-                       help="Output file to save report (optional)")
+    parser.add_argument("--output_dir", type=str, default="./reports",
+                       help="Output directory to save report (optional)")
     # for pairwise transfer analysis
     parser.add_argument("--answer_position", type=str, default=None,
                        help="Answer position to analyze (default: None)")
     parser.add_argument("--baseline_model_name", type=str, default=None,
-                       help="Baseline model name (default: None)")
+                       help="Baseline model implementation name (default: None)")
     
     args = parser.parse_args()
-    
-    # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    
-    try:
-        analyzer = TransferAnalyzer(args.trajectory_dir)
-        
+    setup_logging(task_name="transfer_analysis")
 
-        # Analyze single transfer
-        print(f"🔄 Analyzing transfer: {args.source_judge} → {args.target_judge}")
-        print(f"Strategy: {args.strategy}")
-        if args.dataset_name:
-            print(f"Dataset: {args.dataset_name}")
-        print("=" * 80)
-        
-        result = await analyzer.analyze_transfer(
-            source_judge=args.source_judge,
-            target_judge=args.target_judge,
-            strategy=args.strategy,
-            dataset_name=args.dataset_name,
-            judge_type=args.judge_type,
-            answer_position=args.answer_position,
-            baseline_model_name=args.baseline_model_name
-        )
-        results = [result]
+    source_judge_name = get_model_name(args.source_judge)
+    target_judge_name = get_model_name(args.target_judge)
+
+    source_judge_implementation_name = args.source_judge
+    target_judge_implementation_name = args.target_judge
+    baseline_model_implementation_name = args.baseline_model_name
+
+    analyzer = TransferAnalyzer(args.trajectory_dir)
+
+    # Analyze single transfer
+    print(f"🔄 Analyzing transfer: {source_judge_name} → {target_judge_name}")
+    print(f"Strategy: {args.strategy}")
+    if args.dataset_name:
+        print(f"Dataset: {args.dataset_name}")
+    print("=" * 80)
     
-        # Generate and display report
-        report = analyzer.generate_transfer_report(results)
-        print("\n📊 TRANSFER ANALYSIS REPORT")
-        print("=" * 50)
-        print(report)
+    result = await analyzer.analyze_transfer(
+        source_judge=source_judge_implementation_name,
+        target_judge=target_judge_implementation_name,
+        strategy=args.strategy,
+        dataset_name=args.dataset_name,
+        judge_type=args.judge_type,
+        answer_position=args.answer_position,
+        baseline_model_name=baseline_model_implementation_name
+    )
+    results = [result]
+
+    # Generate and display report
+    report = analyzer.generate_transfer_report(results)
+    print("\n📊 TRANSFER ANALYSIS REPORT")
+    print("=" * 50)
+    print(report)
+    
+    # Save to file if specified
+    if args.output_dir:
+        # create output directory if it doesn't exist
+        os.makedirs(args.output_dir, exist_ok=True)
+        file_name = f"{source_judge_name}_to_{target_judge_name}.md"
+        file_path = os.path.join(args.output_dir, file_name)
+        with open(file_path, 'w') as f:
+            f.write(report)
+        print(f"\n💾 Report saved to: {file_path}")
+    
+    print("\n✅ Transfer analysis completed successfully!")
         
-        # Save to file if specified
-        if args.output_file:
-            with open(args.output_file, 'w') as f:
-                f.write(report)
-            print(f"\n💾 Report saved to: {args.output_file}")
-        
-        print("\n✅ Transfer analysis completed successfully!")
-        
-    except Exception as e:
-        logger.error(f"Transfer analysis failed: {str(e)}", exc_info=True)
-        print(f"❌ Error: {str(e)}")
-        return 1
-        
-    return 0
 
 if __name__ == "__main__":
-    import sys
     sys.exit(asyncio.run(main()))
 
