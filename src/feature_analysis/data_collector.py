@@ -14,7 +14,7 @@ from datetime import datetime
 import asyncio
 
 from abc import ABC, abstractmethod
-from src.llm_evaluator import JudgeModelABC, JudgeType, load_judge_model
+from src.llm_evaluator import JudgeType, load_judge_model
 from src.data.data_utils import load_dataset, load_dataset_for_exploration
 from src.evolve_agent.bias_strategies import BiasModification, Bias_types
 from src.llm_zoo import load_model
@@ -328,13 +328,13 @@ def load_analysis_data(data_dir: str, data_type: str, dataset_name: str, judge_t
 
 async def main():
     setup_logging(task_name="collect_data4analysis")
-    prefix = "/data2/xianglin"
     
+    prefix = "/mnt/hdd1/ljiahao/xianglin"
     data_dir = prefix + "/llm-as-a-judge-attack/data"
     dataset_name = "AlpacaEval"
-    response_model_name = "gpt-4o-mini"
-    judge_backbone = "gemini-2.0-flash"
-    helper_model_name = "gpt-4.1-nano"
+    response_model_name = "gpt-4.1-mini"
+    judge_backbone = "gemini-2.5-flash"
+    helper_model_name = "gemini-1.5-flash-8b"
 
     data_collector = PointwiseDataCollector(data_dir)
     logger.info(f"Collecting data for {dataset_name} with response model {response_model_name} and judge model {judge_backbone} and helper model {helper_model_name}")
