@@ -39,15 +39,13 @@ The trajectory format follows the structure:
 }
 """
 
+import argparse
 import json
 import os
-import glob
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, Union
+from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from datetime import datetime
-import re
 
 
 logger = logging.getLogger(__name__)
@@ -400,7 +398,7 @@ def load_trajectory_directory(directory: str,
                             exclude_patterns: Optional[List[str]] = None,
                             filter_criteria: Optional[Dict[str, List[str]]] = None,
                             exclude_criteria: Optional[Dict[str, List[str]]] = None,
-                            **filters) -> List[LoadedTrajectory]:
+                            ) -> List[LoadedTrajectory]:
     """
     Convenience function to load all trajectories from a directory.
     
@@ -409,7 +407,6 @@ def load_trajectory_directory(directory: str,
         exclude_patterns: Patterns to exclude from loading (filename-based)
         filter_criteria: Metadata criteria for inclusion (e.g., {'strategy': ['ucb', 'random']})
         exclude_criteria: Metadata criteria for exclusion (e.g., {'dataset_name': ['AlpacaEval']})
-        **filters: Additional filters to apply (legacy format)
         
     Returns:
         List of LoadedTrajectory objects
@@ -421,18 +418,26 @@ def load_trajectory_directory(directory: str,
         exclude_patterns = ['warmup', 'init_ucb', 'init_linucb', 'warmup_summary']
     
     trajectories = loader.load_trajectories(exclude_patterns=exclude_patterns)
-    
-    # Apply metadata-based filter criteria (AND logic - all must match)
+    original_count = len(trajectories)
+    print(f"Loaded {original_count} trajectory files")
+
+    # Apply advanced filter criteria (AND logic - all criteria must match)
     if filter_criteria:
+        original_count = len(trajectories)
+        print(f"Filtering trajectories with: {filter_criteria}")
         trajectories = [traj for traj in trajectories if should_include_trajectory(traj, filter_criteria)]
+        filtered_count = original_count - len(trajectories)
+        print(f"Filter removed {filtered_count} files, {len(trajectories)} remaining")
     
-    # Apply metadata-based exclusion criteria (OR logic - any match means exclude)
+    # Apply exclusion criteria (OR logic - any criteria match means exclude)
     if exclude_criteria:
+        original_count = len(trajectories)
+        print(f"Excluding trajectories with: {exclude_criteria}")
         trajectories = [traj for traj in trajectories if not should_exclude_trajectory(traj, exclude_criteria)]
+        excluded_count = original_count - len(trajectories)
+        print(f"Excluded {excluded_count} files, {len(trajectories)} remaining")
     
-    # Apply legacy filters (for backward compatibility)
-    if filters:
-        trajectories = loader.filter_trajectories(trajectories, **filters)
+    print(f"Loaded {len(trajectories)} trajectory files")
     
     return trajectories
 
@@ -609,10 +614,50 @@ def should_include_trajectory(trajectory: LoadedTrajectory, filter_criteria: Dic
     return True  # All criteria matched
 
 
-if __name__ == "__main__":
-    # Example usage
-    import argparse
+# def load_trajectories_from_directory(directory: str, filter_criteria: Optional[Dict[str, List[str]]] = None, exclude_criteria: Optional[Dict[str, List[str]]] = None, show_summary: bool = True) -> List[LoadedTrajectory]:
     
+#     # Parse filter and exclude criteria
+#     filter_criteria = parse_filter_criteria(filter_criteria)
+#     exclude_criteria = parse_exclude_criteria(exclude_criteria)
+    
+#     if filter_criteria:
+#         print(f"Filtering trajectories with: {filter_criteria}")
+#     if exclude_criteria:
+#         print(f"Excluding trajectories with: {exclude_criteria}")
+    
+#     # Load trajectories
+#     trajectories = load_trajectory_directory(directory)
+    
+#     # Apply advanced filter criteria (AND logic - all criteria must match)
+#     if filter_criteria:
+#         original_count = len(trajectories)
+#         trajectories = [traj for traj in trajectories if should_include_trajectory(traj, filter_criteria)]
+#         filtered_count = original_count - len(trajectories)
+#         print(f"Filter removed {filtered_count} files, {len(trajectories)} remaining")
+    
+#     # Apply exclusion criteria (OR logic - any criteria match means exclude)
+#     if exclude_criteria:
+#         original_count = len(trajectories)
+#         trajectories = [traj for traj in trajectories if not should_exclude_trajectory(traj, exclude_criteria)]
+#         excluded_count = original_count - len(trajectories)
+#         print(f"Excluded {excluded_count} files, {len(trajectories)} remaining")
+    
+#     print(f"Loaded {len(trajectories)} trajectory files")
+
+
+def show_summary(trajectories: List[LoadedTrajectory]):
+    print("\n=== SUMMARY ===")
+    for traj in trajectories:
+        print(f"File: {os.path.basename(traj.metadata.file_path)}")
+        print(f"  Strategy: {traj.metadata.strategy}")
+        print(f"  Dataset: {traj.metadata.dataset_name}")
+        print(f"  Questions: {len(traj.trajectories)}")
+        print(f"  Mean final score: {sum(traj.get_final_scores()) / len(traj.trajectories):.3f}")
+        print(f"  Mean improvement: {sum(traj.get_improvements()) / len(traj.trajectories):.3f}")
+        print()
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Load and inspect trajectory files")
     parser.add_argument("--directory", type=str,
                        help="Directory containing trajectory files",
@@ -623,48 +668,18 @@ if __name__ == "__main__":
     parser.add_argument("--exclude", type=str, 
                        help="Exclude files matching criteria (format: 'key1=value1,key2=value2'). "
                             "Example: --exclude 'strategy=random,judge_backbone=gpt-3.5'")
-    parser.add_argument("--show_summary", action="store_true",
-                       help="Show summary statistics")
     
     args = parser.parse_args()
-    
+
+    directory = args.directory
+    filter_criteria = args.filter
+    exclude_criteria = args.exclude
+
     # Parse filter and exclude criteria
-    filter_criteria = parse_filter_criteria(args.filter)
-    exclude_criteria = parse_exclude_criteria(args.exclude)
-    
-    if filter_criteria:
-        print(f"Filtering trajectories with: {filter_criteria}")
-    if exclude_criteria:
-        print(f"Excluding trajectories with: {exclude_criteria}")
-    
-    # Load trajectories
-    trajectories = load_trajectory_directory(args.directory)
-    
-    # Apply advanced filter criteria (AND logic - all criteria must match)
-    if filter_criteria:
-        original_count = len(trajectories)
-        trajectories = [traj for traj in trajectories if should_include_trajectory(traj, filter_criteria)]
-        filtered_count = original_count - len(trajectories)
-        print(f"Filter removed {filtered_count} files, {len(trajectories)} remaining")
-    
-    # Apply exclusion criteria (OR logic - any criteria match means exclude)
-    if exclude_criteria:
-        original_count = len(trajectories)
-        trajectories = [traj for traj in trajectories if not should_exclude_trajectory(traj, exclude_criteria)]
-        excluded_count = original_count - len(trajectories)
-        print(f"Excluded {excluded_count} files, {len(trajectories)} remaining")
-    
-    print(f"Loaded {len(trajectories)} trajectory files")
-    
-    if args.show_summary:
-        print("\n=== SUMMARY ===")
-        for traj in trajectories:
-            print(f"File: {os.path.basename(traj.metadata.file_path)}")
-            print(f"  Strategy: {traj.metadata.strategy}")
-            print(f"  Dataset: {traj.metadata.dataset_name}")
-            print(f"  Questions: {len(traj.trajectories)}")
-            print(f"  Mean final score: {sum(traj.get_final_scores()) / len(traj.trajectories):.3f}")
-            print(f"  Mean improvement: {sum(traj.get_improvements()) / len(traj.trajectories):.3f}")
-            print()
+    filter_criteria_parsed = parse_filter_criteria(filter_criteria)
+    exclude_criteria_parsed = parse_exclude_criteria(exclude_criteria)
+
+    # load_trajectories_from_directory(directory, filter_criteria, exclude_criteria, show_summary)
+    trajectories = load_trajectory_directory(directory, filter_criteria=filter_criteria_parsed, exclude_criteria=exclude_criteria_parsed)
 
     
