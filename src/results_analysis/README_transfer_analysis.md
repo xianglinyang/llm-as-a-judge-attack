@@ -117,10 +117,10 @@ print(report)
 # "openai/gpt-5"
 
 # Basic transfer analysis
-python -m src.results_analysis.transfer_analysis --source_judge openai/o3-mini --target_judge meta-llama/llama-3.3-70b-instruct --strategy ucb --dataset_name AlpacaEval
+python -m src.results_analysis.transfer_analysis --source_judge qwen/qwen3-235b-a22b-2507 --target_judge meta-llama/llama-3.3-70b-instruct --strategy ucb --dataset_name AlpacaEval --judge_type pointwise --answer_position None --baseline_model_name None
 
 # Multiple target judges
-python -m src.results_analysis.transfer_analysis.py --source_judge gpt-4 --multiple_targets "gpt-3.5-turbo,claude-3-sonnet" --strategy ucb --output_file ./reports/transfer_report.md
+python -m src.results_analysis.transfer_analysis --source_judge gpt-4 --multiple_targets "gpt-3.5-turbo,claude-3-sonnet" --strategy ucb --output_file ./reports/transfer_report.md
 ```
 ## Data Requirements
 
