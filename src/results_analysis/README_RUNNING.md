@@ -10,12 +10,14 @@
 
 
 ```bash
-python -m src.results_analysis.visualization.plot_multi_dimensional_comparison.py --group_by judge_model,dataset,judge_type --show_table --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_model=gpt-5 --metric best_so_far
+python -m src.results_analysis.plot_main_results --report_metric pool_mean
 ```
 
 ```bash
-python -m src.results_analysis.analysis.win_rate_analysis --compare random,simple_rewrite_improve
+python -m src.results_analysis.win_rate_analysis --compare ucb,simple_rewrite_improve
+python -m src.results_analysis.win_rate_analysis --compare ucb,random
 ```
+Then create a table myself.
 
 
 # Semantic
@@ -79,11 +81,15 @@ python -m src.results_analysis.transfer_analysis --source_judge openai/o3-mini -
 
 # Multiple target judges
 python -m src.results_analysis.transfer_analysis.py --source_judge gpt-4 --multiple_targets "gpt-3.5-turbo,claude-3-sonnet" --strategy ucb --output_file ./reports/transfer_report.md
+```
 
+Visualization
+```bash
+python -m src.results_analysis.transfer_heatmap_visualization
 ```
 
 
 # Feature Analysis
 ```bash
-python -m src.results_analysis.analysis.regression_analyzer --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_backbone=gpt-5
+python -m src.results_analysis.regression_analyzer --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_backbone=gpt-5
 ```

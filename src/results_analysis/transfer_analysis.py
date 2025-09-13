@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TransferResult:
     """Container for transfer analysis results."""
+    judge_type: str
     source_judge: str
     target_judge: str
     dataset_name: str
@@ -260,6 +261,7 @@ class TransferAnalyzer:
             source_judge=get_model_name(source_judge),
             target_judge=get_model_name(target_judge),
             dataset_name=dataset_name,
+            judge_type=judge_type,
             source_asr=source_asr,
             target_asr=target_asr,
             transfer_asr=transfer_asr,
@@ -309,6 +311,7 @@ class TransferAnalyzer:
         for result in results:
             report_lines.append(f"## {result.source_judge} → {result.target_judge}")
             report_lines.append("")
+            report_lines.append(f"- **Judge Type**: {result.judge_type}")
             report_lines.append(f"- **Dataset**: {result.dataset_name}")
             report_lines.append(f"- **Source ASR**: {result.source_asr:.1f}%")
             report_lines.append(f"- **Target ASR**: {result.target_asr:.1f}%")

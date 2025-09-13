@@ -15,11 +15,10 @@ Color Scheme:
 - Hot Color (bright green/blue): High effectiveness (near 1.0 or 100%)
 - Cold Color (white/pale yellow): Low effectiveness (near 0.0)
 - Negative Color (red): Negative effectiveness (harmful)
+
 """
 
-import os
 import re
-import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -34,6 +33,7 @@ class TransferData:
     """Container for transfer analysis data."""
     source_judge: str
     target_judge: str
+    dataset: str
     source_asr: float
     target_asr: float
     transfer_asr: float
@@ -53,61 +53,86 @@ class TransferHeatmapVisualizer:
         self.reports_dir = Path(reports_dir)
         self.transfer_data: List[TransferData] = []
         
-    def parse_report_file(self, file_path: Path) -> Optional[TransferData]:
+    def parse_report_file(self, file_path: Path) -> List[TransferData]:
         """
-        Parse a single transfer analysis report file.
+        Parse a single transfer analysis report file that may contain multiple datasets.
         
         Args:
             file_path: Path to the report file
             
         Returns:
-            TransferData object or None if parsing fails
+            List of TransferData objects (one per dataset in the file)
         """
         try:
             with open(file_path, 'r') as f:
                 content = f.read()
-                
-            # Extract data using regex patterns
-            patterns = {
-                'source_asr': r'\*\*Source ASR\*\*:\s+(\d+\.?\d*)%',
-                'target_asr': r'\*\*Target ASR\*\*:\s+(\d+\.?\d*)%',
-                'transfer_asr': r'\*\*Transfer ASR\*\*:\s+(\d+\.?\d*)%',
-                'transfer_effectiveness': r'\*\*Transfer Effectiveness\*\*:\s+(-?\d+\.?\d*)',
-                'num_questions': r'\*\*Questions Analyzed\*\*:\s+(\d+)'
-            }
-            
-            extracted_data = {}
-            for key, pattern in patterns.items():
-                match = re.search(pattern, content)
-                if match:
-                    extracted_data[key] = float(match.group(1))
-                else:
-                    print(f"Warning: Could not find {key} in {file_path}")
-                    return None
             
             # Extract source and target judge from filename
             filename = file_path.stem
             match = re.match(r'(.+)_to_(.+)', filename)
-            if match:
-                source_judge = match.group(1)
-                target_judge = match.group(2)
-            else:
+            if not match:
                 print(f"Warning: Could not parse judge names from filename {filename}")
-                return None
+                return []
+            
+            source_judge = match.group(1)
+            target_judge = match.group(2)
+            
+            # Split content by dataset sections
+            # Look for pattern like "## source_judge → target_judge" followed by dataset info
+            section_pattern = rf'## {re.escape(source_judge)} → {re.escape(target_judge)}.*?(?=## {re.escape(source_judge)} → {re.escape(target_judge)}|$)'
+            sections = re.findall(section_pattern, content, re.DOTALL)
+            
+            if not sections:
+                # If no sections found, treat entire content as one section
+                sections = [content]
+            
+            transfer_data_list = []
+            
+            for section in sections:
+                # Extract dataset name
+                dataset_match = re.search(r'\*\*Dataset\*\*:\s+(\w+)', section)
+                if not dataset_match:
+                    print(f"Warning: Could not find dataset in section of {file_path}")
+                    continue
                 
-            return TransferData(
-                source_judge=source_judge,
-                target_judge=target_judge,
-                source_asr=extracted_data['source_asr'],
-                target_asr=extracted_data['target_asr'],
-                transfer_asr=extracted_data['transfer_asr'],
-                transfer_effectiveness=extracted_data['transfer_effectiveness'],
-                num_questions=int(extracted_data['num_questions'])
-            )
+                dataset = dataset_match.group(1)
+                
+                # Extract data using regex patterns
+                patterns = {
+                    'source_asr': r'\*\*Source ASR\*\*:\s+(\d+\.?\d*)%',
+                    'target_asr': r'\*\*Target ASR\*\*:\s+(\d+\.?\d*)%',
+                    'transfer_asr': r'\*\*Transfer ASR\*\*:\s+(\d+\.?\d*)%',
+                    'transfer_effectiveness': r'\*\*Transfer Effectiveness\*\*:\s+(-?\d+\.?\d*)',
+                    'num_questions': r'\*\*Questions Analyzed\*\*:\s+(\d+)'
+                }
+                
+                extracted_data = {}
+                for key, pattern in patterns.items():
+                    match = re.search(pattern, section)
+                    if match:
+                        extracted_data[key] = float(match.group(1))
+                    else:
+                        print(f"Warning: Could not find {key} in {dataset} section of {file_path}")
+                        break
+                else:
+                    # All patterns found successfully
+                    transfer_data = TransferData(
+                        source_judge=source_judge,
+                        target_judge=target_judge,
+                        dataset=dataset,
+                        source_asr=extracted_data['source_asr'],
+                        target_asr=extracted_data['target_asr'],
+                        transfer_asr=extracted_data['transfer_asr'],
+                        transfer_effectiveness=extracted_data['transfer_effectiveness'],
+                        num_questions=int(extracted_data['num_questions'])
+                    )
+                    transfer_data_list.append(transfer_data)
+            
+            return transfer_data_list
             
         except Exception as e:
             print(f"Error parsing {file_path}: {e}")
-            return None
+            return []
     
     def load_transfer_data(self) -> None:
         """Load all transfer data from report files."""
@@ -120,10 +145,10 @@ class TransferHeatmapVisualizer:
         print(f"Found {len(transfer_files)} transfer report files")
         
         for file_path in transfer_files:
-            transfer_data = self.parse_report_file(file_path)
-            if transfer_data:
+            transfer_data_list = self.parse_report_file(file_path)
+            for transfer_data in transfer_data_list:
                 self.transfer_data.append(transfer_data)
-                print(f"Loaded: {transfer_data.source_judge} → {transfer_data.target_judge}")
+                print(f"Loaded: {transfer_data.source_judge} → {transfer_data.target_judge} ({transfer_data.dataset})")
                 
         print(f"Successfully loaded {len(self.transfer_data)} transfer results")
     
@@ -169,7 +194,7 @@ class TransferHeatmapVisualizer:
             
         return effectiveness_matrix, asr_matrix, questions_matrix
     
-    def create_heatmap(self, save_path: Optional[str] = None, figsize: Tuple[int, int] = (12, 10)) -> None:
+    def create_effectiveness_heatmap(self, save_path: Optional[str] = None, figsize: Tuple[int, int] = (12, 10)) -> None:
         """
         Create and display the transfer effectiveness heatmap.
         
@@ -347,15 +372,302 @@ class TransferHeatmapVisualizer:
         report_lines.append("")
         
         return "\n".join(report_lines)
+    
+    def get_dataset_summary(self, dataset_name: str) -> Dict:
+        """
+        Collect summary statistics for a specific dataset.
+        
+        Args:
+            dataset_name: Name of the dataset to summarize (e.g., 'AlpacaEval', 'ArenaHard')
+            
+        Returns:
+            Dictionary containing summary statistics for the dataset
+        """
+        if not self.transfer_data:
+            raise ValueError("No transfer data loaded. Call load_transfer_data() first.")
+        
+        # Filter data for the specified dataset
+        dataset_data = [data for data in self.transfer_data if data.dataset == dataset_name]
+        
+        if not dataset_data:
+            return {
+                'dataset': dataset_name,
+                'error': f'No data found for dataset: {dataset_name}',
+                'available_datasets': list(set(data.dataset for data in self.transfer_data))
+            }
+        
+        # Extract metrics
+        transfer_asrs = [data.transfer_asr for data in dataset_data]
+        transfer_effectivenesses = [data.transfer_effectiveness for data in dataset_data]
+        source_asrs = [data.source_asr for data in dataset_data]
+        target_asrs = [data.target_asr for data in dataset_data]
+        
+        # Get unique judges
+        source_judges = set(data.source_judge for data in dataset_data)
+        target_judges = set(data.target_judge for data in dataset_data)
+        all_judges = source_judges.union(target_judges)
+        
+        # Calculate summary statistics
+        summary = {
+            'dataset': dataset_name,
+            'total_transfer_pairs': len(dataset_data),
+            'unique_judges': len(all_judges),
+            'judge_list': sorted(list(all_judges)),
+            'transfer_asr': {
+                'mean': np.mean(transfer_asrs),
+                'std': np.std(transfer_asrs),
+                'min': np.min(transfer_asrs),
+                'max': np.max(transfer_asrs),
+                'median': np.median(transfer_asrs)
+            },
+            'transfer_effectiveness': {
+                'mean': np.mean(transfer_effectivenesses),
+                'std': np.std(transfer_effectivenesses),
+                'min': np.min(transfer_effectivenesses),
+                'max': np.max(transfer_effectivenesses),
+                'median': np.median(transfer_effectivenesses)
+            },
+            'source_asr': {
+                'mean': np.mean(source_asrs),
+                'std': np.std(source_asrs),
+                'min': np.min(source_asrs),
+                'max': np.max(source_asrs),
+                'median': np.median(source_asrs)
+            },
+            'target_asr': {
+                'mean': np.mean(target_asrs),
+                'std': np.std(target_asrs),
+                'min': np.min(target_asrs),
+                'max': np.max(target_asrs),
+                'median': np.median(target_asrs)
+            }
+        }
+        
+        # Add best and worst performing pairs
+        best_transfer_idx = np.argmax(transfer_effectivenesses)
+        worst_transfer_idx = np.argmin(transfer_effectivenesses)
+        
+        summary['best_transfer'] = {
+            'source_judge': dataset_data[best_transfer_idx].source_judge,
+            'target_judge': dataset_data[best_transfer_idx].target_judge,
+            'transfer_asr': dataset_data[best_transfer_idx].transfer_asr,
+            'transfer_effectiveness': dataset_data[best_transfer_idx].transfer_effectiveness
+        }
+        
+        summary['worst_transfer'] = {
+            'source_judge': dataset_data[worst_transfer_idx].source_judge,
+            'target_judge': dataset_data[worst_transfer_idx].target_judge,
+            'transfer_asr': dataset_data[worst_transfer_idx].transfer_asr,
+            'transfer_effectiveness': dataset_data[worst_transfer_idx].transfer_effectiveness
+        }
+        
+        return summary
+    
+    def create_transfer_matrices_for_dataset(self, dataset_name: Optional[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """
+        Create matrices for a specific dataset or all datasets combined.
+        
+        Args:
+            dataset_name: Name of the dataset to create matrices for. If None, use all datasets.
+            
+        Returns:
+            Tuple of (effectiveness_matrix, asr_matrix, questions_matrix)
+        """
+        if not self.transfer_data:
+            raise ValueError("No transfer data loaded. Call load_transfer_data() first.")
+        
+        # Filter data by dataset if specified
+        if dataset_name:
+            filtered_data = [data for data in self.transfer_data if data.dataset == dataset_name]
+            if not filtered_data:
+                available_datasets = list(set(data.dataset for data in self.transfer_data))
+                raise ValueError(f"No data found for dataset: {dataset_name}. Available datasets: {available_datasets}")
+        else:
+            filtered_data = self.transfer_data
+        
+        # Get all unique judges
+        all_judges = set()
+        for data in filtered_data:
+            all_judges.add(data.source_judge)
+            all_judges.add(data.target_judge)
+        all_judges = sorted(list(all_judges))
+        
+        # Initialize matrices with NaN
+        effectiveness_matrix = pd.DataFrame(index=all_judges, columns=all_judges, dtype=float)
+        asr_matrix = pd.DataFrame(index=all_judges, columns=all_judges, dtype=float)
+        questions_matrix = pd.DataFrame(index=all_judges, columns=all_judges, dtype=int)
+        
+        # Fill matrices with data
+        for data in filtered_data:
+            effectiveness_matrix.loc[data.source_judge, data.target_judge] = data.transfer_effectiveness
+            asr_matrix.loc[data.source_judge, data.target_judge] = data.transfer_asr
+            questions_matrix.loc[data.source_judge, data.target_judge] = data.num_questions
+        
+        # Fill diagonal with perfect transfer (effectiveness = 1.0, ASR = source ASR)
+        for judge in all_judges:
+            effectiveness_matrix.loc[judge, judge] = 1.0
+            # Find source ASR for this judge
+            source_asr = None
+            for data in filtered_data:
+                if data.source_judge == judge:
+                    source_asr = data.source_asr
+                    break
+            if source_asr is not None:
+                asr_matrix.loc[judge, judge] = source_asr
+            
+        return effectiveness_matrix, asr_matrix, questions_matrix
+    
+    def create_asr_heatmap(self, dataset_name: Optional[str] = None, save_path: Optional[str] = None, 
+                          figsize: Tuple[int, int] = (12, 10)) -> None:
+        """
+        Create and display a transfer ASR heatmap for a specific dataset or all datasets.
+        
+        Args:
+            dataset_name: Name of the dataset to visualize. If None, use all datasets.
+            save_path: Path to save the heatmap image (optional)
+            figsize: Figure size as (width, height)
+        """
+        effectiveness_matrix, asr_matrix, questions_matrix = self.create_transfer_matrices_for_dataset(dataset_name)
+
+        # set the diagonal to 100
+        np.fill_diagonal(asr_matrix.values, 100)
+        
+        # Create figure and axis
+        plt.figure(figsize=figsize)
+        
+        # Create custom colormap for ASR (0-100%)
+        colors = ['#FFFFFF', '#FFF2CC', '#FFE699', '#FFD966', '#FFCC33', '#FF9900', '#FF6600', '#CC3300']
+        n_bins = 100
+        cmap = plt.cm.colors.LinearSegmentedColormap.from_list('asr', colors, N=n_bins)
+        
+        # Create heatmap
+        mask = asr_matrix.isna()
+        
+        ax = sns.heatmap(
+            asr_matrix.astype(float),
+            annot=True,
+            fmt='.1f',
+            cmap=cmap,
+            vmin=0,
+            vmax=100,
+            square=True,
+            linewidths=0.5,
+            cbar_kws={'label': 'Transfer ASR (%)'},
+            mask=mask
+        )
+        
+        # Customize the plot
+        title = f'Transfer ASR Heatmap'
+        if dataset_name:
+            title += f' - {dataset_name} Dataset'
+        # else:
+            # title += ' - All Datasets'
+
+        
+        plt.title(title, fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel('Target Judge', fontsize=14, fontweight='bold')
+        plt.ylabel('Source Judge', fontsize=14, fontweight='bold')
+        
+        # Rotate labels for better readability
+        plt.xticks(rotation=45, ha='right')
+        plt.yticks(rotation=0)
+        
+        # Adjust layout to prevent label cutoff
+        plt.tight_layout()
+        
+        # Save if path provided
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"ASR heatmap saved to: {save_path}")
+        
+        plt.show()
+    
+    def create_comparison_heatmaps(self, save_dir: Optional[str] = None, figsize: Tuple[int, int] = (15, 6)) -> None:
+        """
+        Create side-by-side comparison heatmaps for all available datasets.
+        
+        Args:
+            save_dir: Directory to save the heatmap images (optional)
+            figsize: Figure size as (width, height)
+        """
+        if not self.transfer_data:
+            raise ValueError("No transfer data loaded. Call load_transfer_data() first.")
+        
+        # Get all available datasets
+        available_datasets = sorted(list(set(data.dataset for data in self.transfer_data)))
+        
+        if len(available_datasets) == 0:
+            print("No datasets found in the transfer data.")
+            return
+        
+        # Create subplots for each dataset
+        fig, axes = plt.subplots(1, len(available_datasets), figsize=(figsize[0] * len(available_datasets), figsize[1]))
+        
+        # Handle case with single dataset
+        if len(available_datasets) == 1:
+            axes = [axes]
+        
+        for i, dataset in enumerate(available_datasets):
+            effectiveness_matrix, asr_matrix, questions_matrix = self.create_transfer_matrices_for_dataset(dataset)
+            # set the diagonal to 100
+            np.fill_diagonal(asr_matrix.values, 100)
+            
+            # Create custom colormap for ASR (0-100%)
+            colors = ['#FFFFFF', '#FFF2CC', '#FFE699', '#FFD966', '#FFCC33', '#FF9900', '#FF6600', '#CC3300']
+            n_bins = 100
+            cmap = plt.cm.colors.LinearSegmentedColormap.from_list('asr', colors, N=n_bins)
+            
+            # Create heatmap
+            mask = asr_matrix.isna()
+            
+            sns.heatmap(
+                asr_matrix.astype(float),
+                annot=True,
+                fmt='.1f',
+                cmap=cmap,
+                vmin=0,
+                vmax=100,
+                square=True,
+                linewidths=0.5,
+                cbar=True,
+                mask=mask,
+                ax=axes[i]
+            )
+            
+            # Customize subplot
+            axes[i].set_title(f'{dataset} Dataset', fontsize=14, fontweight='bold')
+            axes[i].set_xlabel('Target Judge', fontsize=12, fontweight='bold')
+            if i == 0:
+                axes[i].set_ylabel('Source Judge', fontsize=12, fontweight='bold')
+            else:
+                axes[i].set_ylabel('')
+            
+            # Rotate labels for better readability
+            axes[i].tick_params(axis='x', rotation=45)
+            axes[i].tick_params(axis='y', rotation=0)
+        
+        # Main title
+        fig.suptitle('Transfer ASR Comparison Across Datasets', fontsize=18, fontweight='bold', y=1.02)
+        
+        # Adjust layout to prevent label cutoff
+        plt.tight_layout()
+        
+        # Save if directory provided
+        if save_dir:
+            save_path = Path(save_dir) / "transfer_asr_comparison.pdf"
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"Comparison heatmaps saved to: {save_path}")
+        
+        plt.show()
 
 def main():
     """Main function for command-line usage."""
     parser = argparse.ArgumentParser(description="Generate Transfer Effectiveness Heatmap")
     parser.add_argument("--reports_dir", type=str, 
-                       default="/home/ljiahao/xianglin/git_space/llm-as-a-judge-attack/reports",
+                       default="./reports",
                        help="Directory containing transfer analysis reports")
     parser.add_argument("--output_dir", type=str,
-                       default="/home/ljiahao/xianglin/git_space/llm-as-a-judge-attack/reports",
+                       default="./reports",
                        help="Directory to save output files")
     parser.add_argument("--figsize", nargs=2, type=int, default=[12, 10],
                        help="Figure size as width height")
@@ -376,23 +688,33 @@ def main():
     # Create output directory
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Generate heatmap
-    print("Generating transfer effectiveness heatmap...")
-    heatmap_path = output_dir / "transfer_effectiveness_heatmap.png"
-    visualizer.create_heatmap(save_path=str(heatmap_path), figsize=tuple(args.figsize))
-    
+
+    # Create comparison heatmaps for all datasets
+    save_path = output_dir / "comparison_heatmaps.pdf"
+    visualizer.create_comparison_heatmaps(save_dir=output_dir)
+
+    # Create combined ASR heatmap
+    save_path = output_dir / "combined_asr.pdf"
+    visualizer.create_asr_heatmap(dataset_name=None, save_path=save_path)
+
+    # Create combined ASR heatmap
+    save_path = output_dir / "alpaca_eval_asr.pdf"
+    visualizer.create_asr_heatmap(dataset_name="AlpacaEval", save_path=save_path)
+
+    # Create combined ASR heatmap
+    save_path = output_dir / "arena_hard_asr.pdf"
+    visualizer.create_asr_heatmap(dataset_name="ArenaHard", save_path=save_path)
+
     # Generate comprehensive report
     print("Generating comprehensive transfer analysis report...")
     report = visualizer.generate_summary_report()
     
     # Save report
-    report_path = output_dir / "transfer_effectiveness_summary.md"
+    report_path = output_dir / "transfer_summary.md"
     with open(report_path, 'w') as f:
         f.write(report)
     
     print(f"Summary report saved to: {report_path}")
-    print(f"Heatmap visualization saved to: {heatmap_path}")
     print("\n✅ Transfer effectiveness analysis completed successfully!")
 
 if __name__ == "__main__":
