@@ -1,4 +1,4 @@
-# Main Results
+# RQ1: Main Results
 
 1. best so far
 2. win rate per prompt
@@ -8,10 +8,12 @@
 5. ci width
 6. ucb gap
 
+## metrics
 
 ```bash
 python -m src.results_analysis.plot_main_results --report_metric pool_mean
 ```
+
 
 ```bash
 python -m src.results_analysis.win_rate_analysis --compare ucb,simple_rewrite_improve
@@ -19,8 +21,21 @@ python -m src.results_analysis.win_rate_analysis --compare ucb,random
 ```
 Then create a table myself.
 
+## Question Types Analysis
 
-# Semantic
+```bash
+# Generate question type analysis using data_loader integration
+python -m src.results_analysis.question_type_analysis --question_type_analysis --dataset_name AlpacaEval --judge_type pointwise
+
+# Include instruction samples report
+python question_type_analysis.py --question_type_analysis --instruction_samples --dataset_name AlpacaEval
+
+# Specify custom data directory
+python question_type_analysis.py --question_type_analysis --data_dir /path/to/data
+```
+
+
+## Semantic Sim
 ```bash
 # Basic analysis
 python -m src.results_analysis.semantic_preservation_analysis --dataset_name AlpacaEval --judge_type pointwise
@@ -50,23 +65,14 @@ python -m src.results_analysis.semantic_preservation_analysis --comprehensive --
 python -m src.results_analysis.semantic_preservation_analysis --comprehensive --output_file semantic_full_report.md --dataset_name AlpacaEval --judge_type pointwise
 ```
 
+# RQ2
 
-
-# Question Types
-
+## Feature Analysis
 ```bash
-# Generate question type analysis using data_loader integration
-python -m src.results_analysis.question_type_analysis --question_type_analysis --dataset_name AlpacaEval --judge_type pointwise
-
-# Include instruction samples report
-python question_type_analysis.py --question_type_analysis --instruction_samples --dataset_name AlpacaEval
-
-# Specify custom data directory
-python question_type_analysis.py --question_type_analysis --data_dir /path/to/data
+python -m src.results_analysis.regression_analyzer --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_backbone=gpt-5
 ```
 
-
-# Transfer
+## Transfer Analysis
 
 ```bash
 # "qwen/qwen3-235b-a22b-2507"
@@ -75,6 +81,8 @@ python question_type_analysis.py --question_type_analysis --data_dir /path/to/da
 # "google/gemini-2.5-flash"
 # "openai/o3-mini"
 # "openai/gpt-5"
+
+bash script/results_analysis/run_transfer.sh
 
 # Basic transfer analysis
 python -m src.results_analysis.transfer_analysis --source_judge openai/o3-mini --target_judge meta-llama/llama-3.3-70b-instruct --strategy ucb --dataset_name AlpacaEval
@@ -89,7 +97,3 @@ python -m src.results_analysis.transfer_heatmap_visualization
 ```
 
 
-# Feature Analysis
-```bash
-python -m src.results_analysis.regression_analyzer --exclude strategy=simple_rewrite_holistic,llm_agent=gpt-4.1-nano,judge_backbone=gpt-5
-```
