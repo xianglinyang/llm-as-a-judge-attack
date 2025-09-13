@@ -38,6 +38,7 @@ class TransferResult:
     """Container for transfer analysis results."""
     source_judge: str
     target_judge: str
+    dataset_name: str
     source_asr: float
     target_asr: float
     transfer_asr: float  # ASR when source responses evaluated on target judge
@@ -258,6 +259,7 @@ class TransferAnalyzer:
         return TransferResult(
             source_judge=get_model_name(source_judge),
             target_judge=get_model_name(target_judge),
+            dataset_name=dataset_name,
             source_asr=source_asr,
             target_asr=target_asr,
             transfer_asr=transfer_asr,
@@ -289,13 +291,14 @@ class TransferAnalyzer:
         # Summary table
         report_lines.append("## Transfer Performance Summary")
         report_lines.append("")
-        report_lines.append("| Source Judge | Target Judge | Source ASR | Target ASR | Transfer ASR | Transfer Effectiveness | Questions |")
+        report_lines.append("| Source Judge | Target Judge | Dataset | Source ASR | Target ASR | Transfer ASR | Transfer Effectiveness | Questions |")
         report_lines.append("| ------------ | ------------ | ---------- | ---------- | ------------ | --------------------- | --------- |")
         
         for result in results:
             transfer_eff = f"{result.transfer_effectiveness:.2f}" if not np.isnan(result.transfer_effectiveness) else "N/A"
             report_lines.append(
                 f"| {result.source_judge} | {result.target_judge} | "
+                f"{result.dataset_name} | "
                 f"{result.source_asr:.1f}% | {result.target_asr:.1f}% | "
                 f"{result.transfer_asr:.1f}% | {transfer_eff} | {result.num_questions} |"
             )
@@ -306,6 +309,7 @@ class TransferAnalyzer:
         for result in results:
             report_lines.append(f"## {result.source_judge} → {result.target_judge}")
             report_lines.append("")
+            report_lines.append(f"- **Dataset**: {result.dataset_name}")
             report_lines.append(f"- **Source ASR**: {result.source_asr:.1f}%")
             report_lines.append(f"- **Target ASR**: {result.target_asr:.1f}%")
             report_lines.append(f"- **Transfer ASR**: {result.transfer_asr:.1f}%")
@@ -410,7 +414,7 @@ async def main():
         os.makedirs(args.output_dir, exist_ok=True)
         file_name = f"{source_judge_name}_to_{target_judge_name}.md"
         file_path = os.path.join(args.output_dir, file_name)
-        with open(file_path, 'w') as f:
+        with open(file_path, 'a') as f:
             f.write(report)
         print(f"\n💾 Report saved to: {file_path}")
     
