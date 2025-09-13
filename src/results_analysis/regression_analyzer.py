@@ -14,8 +14,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from scipy import stats
 
-from src.results_analysis.results_loader.trajectory_loader import load_trajectory_directory, LoadedTrajectory, TrajectoryItem
+from src.results_analysis.results_loader.trajectory_loader import load_trajectory_directory, LoadedTrajectory
 from src.feature_analysis.feature_extractor import get_feature_names, extract_features
+from src.results_analysis.results_loader.utils import parse_filter_criteria, parse_exclude_criteria
 
 logger = logging.getLogger(__name__)
 
@@ -228,8 +229,6 @@ if __name__ == "__main__":
     exclude_criteria = args.exclude
     group_by = args.group_by
 
-    # Parse filter and exclude criteria
-    from src.results_analysis.trajectory_loader import parse_filter_criteria, parse_exclude_criteria
     filter_criteria_parsed = parse_filter_criteria(filter_criteria)
     exclude_criteria_parsed = parse_exclude_criteria(exclude_criteria)
     
