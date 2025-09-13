@@ -47,6 +47,8 @@ from dataclasses import dataclass
 from collections import defaultdict
 import numpy as np
 
+from src.results_analysis.results_loader.utils import parse_exclude_criteria, parse_filter_criteria
+
 logger = logging.getLogger(__name__)
 
 
@@ -213,9 +215,8 @@ class MetricsLoader:
         self.available_files = self._discover_metrics_files()
         logger.info(f"Discovered {len(self.available_files)} metrics files")
     
-    def _discover_metrics_files(self) -> List[Path]:
+    def _discover_metrics_files(self, patterns: List[str] = ["*.json"]) -> List[Path]:
         """Discover available metrics files."""
-        patterns = ["*.json"]
         files = []
         
         for pattern in patterns:
@@ -225,15 +226,220 @@ class MetricsLoader:
         filtered_files = []
         for file in files:
             filename = file.name.lower()
-            # Skip warmup files but keep ucb_with_warmup
+            # Default skip files
             if any(skip_term in filename for skip_term in ['init_ucb_warmup', 'init_linucb_warmup']):
                 continue
-            if (('warmup' in filename or 'init_ucb' in filename or 'init_linucb' in filename) 
-                and 'ucb_with_warmup' not in filename):
+            if 'warmup' in filename or 'init_ucb' in filename or 'init_linucb' in filename:
                 continue
             filtered_files.append(file)
         
         return sorted(filtered_files)
+    
+    def _matches_criteria(self, metadata: ExplorationMetadata, criteria: Dict[str, List[str]]) -> bool:
+        """Check if metadata matches the given criteria.
+        
+        Args:
+            metadata: ExplorationMetadata object to check
+            criteria: Dictionary of criteria to match against
+            
+        Returns:
+            True if metadata matches all criteria, False otherwise
+        """
+        for key, values in criteria.items():
+            metadata_value = getattr(metadata, key, None)
+            if metadata_value is None:
+                return False
+            
+            metadata_value_str = str(metadata_value).lower()
+            
+            # Check if any of the criterion values match
+            matches_any = False
+            for value in values:
+                value_str = value.lower()
+                if value_str in metadata_value_str or metadata_value_str == value_str:
+                    matches_any = True
+                    break
+            
+            if not matches_any:
+                return False
+        
+        return True
+    
+    def _should_exclude(self, metadata: ExplorationMetadata, exclude_criteria: Dict[str, List[str]]) -> bool:
+        """Check if metadata should be excluded based on exclude criteria.
+        
+        Args:
+            metadata: ExplorationMetadata object to check
+            exclude_criteria: Dictionary of criteria for exclusion
+            
+        Returns:
+            True if metadata should be excluded, False otherwise
+        """
+        for key, values in exclude_criteria.items():
+            metadata_value = getattr(metadata, key, None)
+            if metadata_value is None:
+                continue
+            
+            metadata_value_str = str(metadata_value).lower()
+            
+            # Check if any of the exclude values match
+            for value in values:
+                value_str = value.lower()
+                if value_str in metadata_value_str or metadata_value_str == value_str:
+                    return True
+        
+        return False
+    
+    def filter_metrics_files(self, criteria: Dict[str, List[str]]) -> List[Path]:
+        """Filter metrics files by criteria.
+        
+        Args:
+            criteria: Dictionary of filter criteria
+                     Format: {'key': ['value1', 'value2']}
+                     Only files matching ALL keys will be included
+                     
+        Returns:
+            List of filtered file paths
+        """
+        if not criteria:
+            return self.available_files.copy()
+        
+        filtered_files = []
+        
+        for file_path in self.available_files:
+            try:
+                # Load metadata to check criteria
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                metadata = ExplorationMetadata.from_dict(data, str(file_path))
+                
+                if self._matches_criteria(metadata, criteria):
+                    filtered_files.append(file_path)
+                    
+            except Exception as e:
+                logger.warning(f"Error checking criteria for {file_path}: {e}")
+        
+        # Update available files
+        self.available_files = filtered_files
+        logger.info(f"Filtered to {len(filtered_files)} files based on criteria")
+        return filtered_files
+    
+    def exclude_metrics_files(self, exclude_criteria: Dict[str, List[str]]) -> List[Path]:
+        """Exclude metrics files by criteria.
+        
+        Args:
+            exclude_criteria: Dictionary of exclusion criteria
+                            Format: {'key': ['value1', 'value2']}
+                            Files matching ANY of the criteria will be excluded
+                            
+        Returns:
+            List of remaining file paths after exclusion
+        """
+        if not exclude_criteria:
+            return self.available_files.copy()
+        
+        filtered_files = []
+        
+        for file_path in self.available_files:
+            try:
+                # Load metadata to check exclusion criteria
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                metadata = ExplorationMetadata.from_dict(data, str(file_path))
+                
+                if not self._should_exclude(metadata, exclude_criteria):
+                    filtered_files.append(file_path)
+                    
+            except Exception as e:
+                logger.warning(f"Error checking exclusion criteria for {file_path}: {e}")
+                # Include file if we can't check criteria
+                filtered_files.append(file_path)
+        
+        # Update available files
+        self.available_files = filtered_files
+        logger.info(f"Excluded files, {len(filtered_files)} files remaining")
+        return filtered_files
+    
+    def filter_and_exclude_metrics_files(self, filter_criteria: Dict[str, List[str]], exclude_criteria: Dict[str, List[str]]) -> List[Path]:
+        """Filter and exclude metrics files by criteria.
+        
+        Args:
+            filter_criteria: Dictionary of filter criteria (include only matching)
+            exclude_criteria: Dictionary of exclusion criteria (exclude matching)
+            
+        Returns:
+            List of file paths after filtering and exclusion
+        """
+        filtered_files = []
+        
+        for file_path in self.available_files:
+            try:
+                # Load metadata to check criteria
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                metadata = ExplorationMetadata.from_dict(data, str(file_path))
+                
+                # Check filter criteria (must match if provided)
+                if filter_criteria and not self._matches_criteria(metadata, filter_criteria):
+                    continue
+                
+                # Check exclude criteria (must not match if provided)
+                if exclude_criteria and self._should_exclude(metadata, exclude_criteria):
+                    continue
+                
+                filtered_files.append(file_path)
+                    
+            except Exception as e:
+                logger.warning(f"Error checking criteria for {file_path}: {e}")
+        
+        # Update available files
+        self.available_files = filtered_files
+        logger.info(f"Applied filter and exclude criteria, {len(filtered_files)} files remaining")
+        return filtered_files
+    
+    def filter_by_string(self, criteria_string: str) -> List[Path]:
+        """Filter metrics files using string criteria format.
+        
+        Args:
+            criteria_string: String in format 'key1=value1,key2=value2'
+            
+        Returns:
+            List of filtered file paths
+        """
+        criteria = parse_filter_criteria(criteria_string)
+        return self.filter_metrics_files(criteria)
+    
+    def exclude_by_string(self, exclude_string: str) -> List[Path]:
+        """Exclude metrics files using string criteria format.
+        
+        Args:
+            exclude_string: String in format 'key1=value1,key2=value2'
+            
+        Returns:
+            List of remaining file paths after exclusion
+        """
+        exclude_criteria = parse_exclude_criteria(exclude_string)
+        return self.exclude_metrics_files(exclude_criteria)
+    
+    def filter_and_exclude_by_string(self, filter_string: str = "", exclude_string: str = "") -> List[Path]:
+        """Filter and exclude metrics files using string criteria format.
+        
+        Args:
+            filter_string: String in format 'key1=value1,key2=value2' for filtering
+            exclude_string: String in format 'key1=value1,key2=value2' for exclusion
+            
+        Returns:
+            List of file paths after filtering and exclusion
+        """
+        filter_criteria = parse_filter_criteria(filter_string) if filter_string else {}
+        exclude_criteria = parse_exclude_criteria(exclude_string) if exclude_string else {}
+        return self.filter_and_exclude_metrics_files(filter_criteria, exclude_criteria)
+    
+    def reset_available_files(self) -> List[Path]:
+        """Reset available files to the original discovered set."""
+        self.available_files = self._discover_metrics_files()
+        logger.info(f"Reset to {len(self.available_files)} original files")
+        return self.available_files
     
     def list_available_files(self) -> List[str]:
         """Get list of available metrics file names."""
@@ -573,6 +779,27 @@ def main():
     print(f"\nImprovement stats:")
     print(f"  Mean: {stats['improvement_stats']['mean']:.3f}")
     print(f"  Std:  {stats['improvement_stats']['std']:.3f}")
+    
+    # Example: Filter and exclude functionality
+    print("\n=== FILTER AND EXCLUDE EXAMPLES ===")
+    
+    # Example 1: Filter by strategy using string format
+    print(f"Original files: {len(loader.available_files)}")
+    loader.filter_by_string("strategy=ucb")
+    print(f"After filtering by strategy=ucb: {len(loader.available_files)}")
+    
+    # Reset and try exclusion
+    loader.reset_available_files()
+    loader.exclude_by_string("strategy=random")
+    print(f"After excluding strategy=random: {len(loader.available_files)}")
+    
+    # Reset and try combined filtering
+    loader.reset_available_files()
+    loader.filter_and_exclude_by_string("judge_type=single", "strategy=random")
+    print(f"After filtering judge_type=single and excluding strategy=random: {len(loader.available_files)}")
+    
+    # Reset for remaining examples
+    loader.reset_available_files()
     
     # Example: Compare strategies
     print("\n=== STRATEGY COMPARISON ===")
