@@ -96,4 +96,12 @@ Visualization
 python -m src.results_analysis.transfer_heatmap_visualization
 ```
 
+# RQ3
+
+## Explanation
+```bash
+python -m src.defense.explanation_filter --filter strategy=simple_rewrite_improve,dataset_name=ArenaHard --exclude llm_agent_name=gpt-4.1-nano
+```
+Then read the result from `/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/reports/`
+
 
