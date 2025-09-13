@@ -150,6 +150,7 @@ class CategoryComparisonAnalyzer:
         """
         initial_scores = []
         final_scores = []
+        one_shot_scores = []
         
         for traj in trajectories:
             for category in categories:
@@ -157,6 +158,7 @@ class CategoryComparisonAnalyzer:
                 for item in category_items:
                     initial_scores.append(item.initial_score)
                     final_scores.append(item.final_score)
+                    one_shot_scores.append(max(item.history[1].score if len(item.history) > 1 else item.initial_score, item.initial_score))
         
         if not initial_scores:
             logger.warning(f"No data found for categories: {categories}")
@@ -164,11 +166,14 @@ class CategoryComparisonAnalyzer:
             
         initial_scores = np.array(initial_scores)
         final_scores = np.array(final_scores)
+        one_shot_scores = np.array(one_shot_scores)
         
         asr = self.calculate_asr(initial_scores, final_scores)
         sl = self.calculate_sl(initial_scores, final_scores)
+        one_shot_asr = self.calculate_asr(initial_scores, one_shot_scores)
+        one_shot_sl = self.calculate_sl(initial_scores, one_shot_scores)
         
-        return MetricResult(asr=asr, sl=sl)
+        return MetricResult(asr=asr, sl=sl), MetricResult(asr=one_shot_asr, sl=one_shot_sl)
         
     def analyze_attack_method(self, attack_name: str, 
                             filter_criteria: Optional[Dict[str, Any]] = None) -> AttackResult:
@@ -203,8 +208,8 @@ class CategoryComparisonAnalyzer:
             category_results[category] = self.get_category_metrics(trajectories, category)
         
         # Calculate grouped metrics
-        objective_result = self.get_grouped_metrics(trajectories, OBJECTIVE_CATEGORIES)
-        subjective_result = self.get_grouped_metrics(trajectories, SUBJECTIVE_CATEGORIES)
+        objective_result, one_shot_result = self.get_grouped_metrics(trajectories, OBJECTIVE_CATEGORIES)
+        subjective_result, one_shot_result = self.get_grouped_metrics(trajectories, SUBJECTIVE_CATEGORIES)
         
         return AttackResult(
             name=attack_name,
@@ -212,6 +217,13 @@ class CategoryComparisonAnalyzer:
             subjective_asr=subjective_result.asr, 
             objective_sl=objective_result.sl,
             subjective_sl=subjective_result.sl,
+            category_results=category_results
+        ), AttackResult(
+            name=attack_name,
+            objective_asr=one_shot_result.asr,
+            subjective_asr=one_shot_result.asr,
+            objective_sl=one_shot_result.sl,
+            subjective_sl=one_shot_result.sl,
             category_results=category_results
         )
         
@@ -226,16 +238,18 @@ class CategoryComparisonAnalyzer:
             List of AttackResult objects
         """
         results = []
-        
+        one_shot_results = []
+
         for config in attack_configs:
             attack_name = config['name']
             filter_criteria = config.get('filter_criteria', {})
             
             logger.info(f"Analyzing attack method: {attack_name}")
-            result = self.analyze_attack_method(attack_name, filter_criteria)
+            result, one_shot_result = self.analyze_attack_method(attack_name, filter_criteria)
             results.append(result)
+            one_shot_results.append(one_shot_result)
             
-        return results
+        return results, one_shot_results
         
     def generate_comparison_table(self, attack_configs: List[Dict[str, Any]], 
                                 baseline_idx: int = 0) -> str:
@@ -249,7 +263,7 @@ class CategoryComparisonAnalyzer:
         Returns:
             Markdown table string
         """
-        results = self.compare_attacks(attack_configs)
+        results, one_shot_results = self.compare_attacks(attack_configs)
         
         if not results:
             return "No results to display."
@@ -295,6 +309,15 @@ class CategoryComparisonAnalyzer:
                 
             table_lines.append(f"| {result_name:16} | {obj_asr:15} | {subj_asr:16} | {asr_delta:5} | {obj_sl:16} | {subj_sl:17} | {sl_delta:5} |")
         
+        for one_shot_result in one_shot_results:
+            obj_asr = f"{one_shot_result.objective_asr:.1f}%"
+            subj_asr = f"{one_shot_result.subjective_asr:.1f}%"
+            asr_delta = f"{one_shot_result.subjective_asr_delta:+.1f}" if hasattr(one_shot_result, 'subjective_asr_delta') else "—"
+            obj_sl = f"{one_shot_result.objective_sl:.2f}"
+            subj_sl = f"{one_shot_result.subjective_sl:.2f}"
+            sl_delta = f"{one_shot_result.subjective_sl_delta:+.2f}" if hasattr(one_shot_result, 'subjective_sl_delta') else "—"
+            table_lines.append(f"| One-shot {one_shot_result.name:16} | {obj_asr:15} | {subj_asr:16} | {asr_delta:5} | {obj_sl:16} | {subj_sl:17} | {sl_delta:5} |")
+        
         return "\n".join(table_lines)
         
     def generate_detailed_category_table(self, attack_configs: List[Dict[str, Any]]) -> str:
@@ -307,7 +330,7 @@ class CategoryComparisonAnalyzer:
         Returns:
             Markdown table string with all categories
         """
-        results = self.compare_attacks(attack_configs)
+        results, one_shot_results = self.compare_attacks(attack_configs)
         
         if not results:
             return "No results to display."
@@ -410,8 +433,8 @@ class CategoryComparisonAnalyzer:
                 category_results[category] = self.get_category_metrics(group_trajs, category)
             
             # Calculate grouped metrics
-            objective_result = self.get_grouped_metrics(group_trajs, OBJECTIVE_CATEGORIES)
-            subjective_result = self.get_grouped_metrics(group_trajs, SUBJECTIVE_CATEGORIES)
+            objective_result, one_shot_result = self.get_grouped_metrics(group_trajs, OBJECTIVE_CATEGORIES)
+            subjective_result, one_shot_result = self.get_grouped_metrics(group_trajs, SUBJECTIVE_CATEGORIES)
             
             results[group_name] = AttackResult(
                 name=group_name,
@@ -608,8 +631,8 @@ class QuestionTypeAnalyzer:
                 dataset_mappings[dataset_name] = self._create_instruction_to_metadata_map(dataset_name)
         
         # Group trajectory items by question type and category
-        question_type_data = defaultdict(lambda: {'initial_scores': [], 'final_scores': [], 'instructions': []})
-        category_data = defaultdict(lambda: {'initial_scores': [], 'final_scores': [], 'instructions': []})
+        question_type_data = defaultdict(lambda: {'initial_scores': [], 'final_scores': [], 'instructions': [], 'one_shot_scores': []})
+        category_data = defaultdict(lambda: {'initial_scores': [], 'final_scores': [], 'instructions': [], 'one_shot_scores': []})
         
         for traj in trajectories:
             dataset_name = traj.metadata.dataset_name
@@ -632,45 +655,63 @@ class QuestionTypeAnalyzer:
                 question_type_data[question_type]['initial_scores'].append(item.initial_score)
                 question_type_data[question_type]['final_scores'].append(item.final_score)
                 question_type_data[question_type]['instructions'].append(instruction)
+                question_type_data[question_type]['one_shot_scores'].append(max(item.history[1].score if len(item.history) > 1 else item.initial_score, item.initial_score))
                 
                 # Add to category grouping
                 category_data[category]['initial_scores'].append(item.initial_score)
                 category_data[category]['final_scores'].append(item.final_score)
                 category_data[category]['instructions'].append(instruction)
+                category_data[category]['one_shot_scores'].append(max(item.history[1].score if len(item.history) > 1 else item.initial_score, item.initial_score))
         
         # Calculate metrics for each question type
         question_type_results = {}
         instruction_samples = {}
+        one_shot_question_type_results = {}
         
         for question_type, data in question_type_data.items():
             if data['initial_scores']:
                 initial_scores = np.array(data['initial_scores'])
                 final_scores = np.array(data['final_scores'])
+                one_shot_scores = np.array(data['one_shot_scores'])
                 
                 asr = self._calculate_asr(initial_scores, final_scores)
                 sl = self._calculate_sl(initial_scores, final_scores)
+
+                one_shot_asr = self._calculate_asr(initial_scores, one_shot_scores)
+                one_shot_sl = self._calculate_sl(initial_scores, one_shot_scores)
                 
                 question_type_results[question_type] = MetricResult(asr=asr, sl=sl)
-                
+                one_shot_question_type_results[question_type] = MetricResult(asr=one_shot_asr, sl=one_shot_sl)
                 # Sample instructions for this question type (up to 3 examples)
                 instruction_samples[question_type] = data['instructions'][:3]
         
         # Calculate metrics for each category
         category_results = {}
+        one_shot_category_results = {}
         for category, data in category_data.items():
             if data['initial_scores']:
                 initial_scores = np.array(data['initial_scores'])
                 final_scores = np.array(data['final_scores'])
+                one_shot_scores = np.array(data['one_shot_scores'])
                 
                 asr = self._calculate_asr(initial_scores, final_scores)
                 sl = self._calculate_sl(initial_scores, final_scores)
+
+                one_shot_asr = self._calculate_asr(initial_scores, one_shot_scores)
+                one_shot_sl = self._calculate_sl(initial_scores, one_shot_scores)
                 
                 category_results[category] = MetricResult(asr=asr, sl=sl)
+                one_shot_category_results[category] = MetricResult(asr=one_shot_asr, sl=one_shot_sl)
         
         return QuestionTypeResult(
             name=attack_name,
             question_type_results=question_type_results,
             category_results=category_results,
+            instruction_samples=instruction_samples
+        ),QuestionTypeResult(
+            name=attack_name+"-One-shot",
+            question_type_results=one_shot_question_type_results,
+            category_results=one_shot_category_results,
             instruction_samples=instruction_samples
         )
     
@@ -701,16 +742,17 @@ class QuestionTypeAnalyzer:
             List of QuestionTypeResult objects
         """
         results = []
-        
+        one_shot_results = []
         for config in attack_configs:
             attack_name = config['name']
             filter_criteria = config.get('filter_criteria', {})
             
             logger.info(f"Analyzing question types for attack method: {attack_name}")
-            result = self.analyze_question_types(attack_name, filter_criteria)
+            result, one_shot_result = self.analyze_question_types(attack_name, filter_criteria)
             results.append(result)
-            
-        return results
+            one_shot_results.append(one_shot_result)
+        
+        return results, one_shot_results
     
     def generate_question_type_table(self, attack_configs: List[Dict[str, Any]]) -> str:
         """
@@ -722,7 +764,7 @@ class QuestionTypeAnalyzer:
         Returns:
             Markdown table string organized by question type
         """
-        results = self.compare_question_types(attack_configs)
+        results, one_shot_results = self.compare_question_types(attack_configs)
         
         if not results:
             return "No results to display."
@@ -731,9 +773,7 @@ class QuestionTypeAnalyzer:
         all_question_types = set()
         for result in results:
             all_question_types.update(result.question_type_results.keys())
-        
         all_question_types = sorted(list(all_question_types))
-        
         if not all_question_types:
             return "No question type data found."
         
@@ -755,6 +795,7 @@ class QuestionTypeAnalyzer:
         ]
         
         # Add data rows
+        results.extend(one_shot_results)
         for result in results:
             row_parts = [f"| {result.name}"]
             
@@ -969,7 +1010,7 @@ def main():
     
     attack_configs = [
         {
-            "name": "Holistic Rewrite",
+            "name": "Holistic Rewrite-M",
             "filter_criteria": {
                 "strategy": "simple_rewrite_improve",
                 "dataset_name": args.dataset_name,
