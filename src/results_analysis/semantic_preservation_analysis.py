@@ -235,6 +235,7 @@ class SemanticPreservationAnalyzer:
             List of tuples: (original_response, final_response, question, category, question_type)
         """
         response_pairs = []
+        one_shot_response_pairs = []
         
         for traj in trajectories:
             dataset_name = traj.metadata.dataset_name
@@ -261,8 +262,15 @@ class SemanticPreservationAnalyzer:
                         category,
                         question_type
                     ))
+                    one_shot_response_pairs.append((
+                        original_response,
+                        trajectory_item.history[1].answer, 
+                        question,
+                        category,
+                        question_type
+                    ))
         
-        return response_pairs
+        return response_pairs, one_shot_response_pairs
     
     def analyze_attack_method(self, attack_name: str, 
                             filter_criteria: Optional[Dict[str, Any]] = None,
@@ -300,7 +308,7 @@ class SemanticPreservationAnalyzer:
             )
         
         # Extract response pairs
-        response_pairs = self.extract_response_pairs(trajectories)
+        response_pairs, one_shot_response_pairs = self.extract_response_pairs(trajectories)
         
         if not response_pairs:
             logger.warning(f"No response pairs found for {attack_name}")
@@ -322,20 +330,27 @@ class SemanticPreservationAnalyzer:
         
         # Prepare text pairs for batch processing
         text_pairs = [(original, final) for original, final, _, _, _ in response_pairs]
+        one_shot_text_pairs = [(original, final) for original, final, _, _, _ in one_shot_response_pairs]
         
         # Calculate similarities using batch inference
         similarities = self.calculate_batch_semantic_similarities(text_pairs, batch_size=batch_size)
+        one_shot_similarities = self.calculate_batch_semantic_similarities(one_shot_text_pairs, batch_size=batch_size)
         
         # Group similarities by category and question type
         category_similarities = defaultdict(list)
         question_type_similarities = defaultdict(list)
+        one_shot_category_similarities = defaultdict(list)
+        one_shot_question_type_similarities = defaultdict(list)
         
-        for similarity, (_, _, question, category, question_type) in zip(similarities, response_pairs):
+        for similarity, one_shot_similarity, (_, _, question, category, question_type) in zip(similarities, one_shot_similarities, response_pairs):
             category_similarities[category].append(similarity)
             question_type_similarities[question_type].append(similarity)
+            one_shot_category_similarities[category].append(one_shot_similarity)
+            one_shot_question_type_similarities[question_type].append(one_shot_similarity)
         
         # Calculate aggregate statistics
         similarities = np.array(similarities)
+        one_shot_similarities = np.array(one_shot_similarities)
         
         # Calculate category averages
         category_results = {}
@@ -343,11 +358,23 @@ class SemanticPreservationAnalyzer:
             if sims:
                 category_results[category] = float(np.mean(sims))
         
+        # Calculate one-shot category averages
+        one_shot_category_results = {}
+        for category, sims in one_shot_category_similarities.items():
+            if sims:
+                one_shot_category_results[category] = float(np.mean(sims))
+        
         # Calculate question type averages
         question_type_results = {}
         for question_type, sims in question_type_similarities.items():
             if sims:
                 question_type_results[question_type] = float(np.mean(sims))
+        
+        # Calculate one-shot question type averages
+        one_shot_question_type_results = {}
+        for question_type, one_shot_sims in one_shot_question_type_similarities.items():
+            if one_shot_sims:
+                one_shot_question_type_results[question_type] = float(np.mean(one_shot_sims))
         
         return SemanticPreservationResult(
             attack_method=attack_name,
@@ -361,6 +388,18 @@ class SemanticPreservationAnalyzer:
             num_samples=len(similarities),
             category_results=category_results,
             question_type_results=question_type_results
+        ), SemanticPreservationResult(
+            attack_method=attack_name+"-One-shot",
+            dataset_name=filter_criteria.get('dataset_name', 'Unknown'),
+            judge_type=filter_criteria.get('judge_type', 'Unknown'),
+            mean_similarity=float(np.mean(one_shot_similarities)),
+            std_similarity=float(np.std(one_shot_similarities)),
+            median_similarity=float(np.median(one_shot_similarities)),
+            min_similarity=float(np.min(one_shot_similarities)),
+            max_similarity=float(np.max(one_shot_similarities)),
+            num_samples=len(one_shot_similarities),
+            category_results=one_shot_category_results,
+            question_type_results=one_shot_question_type_results
         )
     
     def compare_attack_methods(self, attack_configs: List[Dict[str, Any]], batch_size: int = 64) -> SemanticComparisonResult:
@@ -374,15 +413,19 @@ class SemanticPreservationAnalyzer:
             SemanticComparisonResult with comparison results
         """
         results = []
+        one_shot_results = []
         
         for config in attack_configs:
             attack_name = config['name']
             filter_criteria = config.get('filter_criteria', {})
             
             logger.info(f"Analyzing semantic preservation for: {attack_name}")
-            result = self.analyze_attack_method(attack_name, filter_criteria, batch_size)
+            result, one_shot_result = self.analyze_attack_method(attack_name, filter_criteria, batch_size)
             results.append(result)
+            one_shot_results.append(one_shot_result)
         
+        # merge the results
+        results.extend(one_shot_results) 
         return SemanticComparisonResult(results=results)
     
     def generate_summary_table(self, comparison_result: SemanticComparisonResult) -> str:
@@ -639,17 +682,17 @@ def main():
     # Define attack configurations
     attack_configs = [
         {
-            "name": "Random",
+            "name": "Holistic Rewrite",
             "filter_criteria": {
-                "strategy": "random",
+                "strategy": "simple_rewrite_improve",
                 "dataset_name": args.dataset_name,
                 "judge_type": args.judge_type
             }
         },
         {
-            "name": "Holistic Rewrite",
+            "name": "Random",
             "filter_criteria": {
-                "strategy": "simple_rewrite_improve",
+                "strategy": "random",
                 "dataset_name": args.dataset_name,
                 "judge_type": args.judge_type
             }
