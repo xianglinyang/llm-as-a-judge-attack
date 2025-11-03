@@ -24,8 +24,8 @@ response_models=(
 judge_model_names=(
     "qwen/qwen3-235b-a22b-2507"
     # "qwen/qwen3-30b-a3b-instruct-2507"
-    # "meta-llama/llama-3.3-70b-instruct"
-    # "deepseek/deepseek-r1-0528"
+    "meta-llama/llama-3.3-70b-instruct"
+    "deepseek/deepseek-r1-0528"
     # "gemini-2.0-flash"
     # "gemini-2.5-flash"
 )
@@ -53,7 +53,7 @@ reward_types=(
 lambda_reg=1.0
 alpha=1.2
 burnin_passes=1
-ucb_passes=20
+ucb_passes=30
 epsilon=0.15
 ci_width_threshold=0.12
 patience=3

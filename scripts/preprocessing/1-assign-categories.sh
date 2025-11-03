@@ -1,6 +1,6 @@
 #!/bin/bash
 
-parallel_num=4
+parallel_num=1
 
 data_dir="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
 
@@ -8,11 +8,11 @@ dataset_names=(
     # "MTBench"
     # "AlpacaEval"
     # "ArenaHard"
-    # "MLRBench"
-    "UltraFeedback"
+    "MLRBench"
+    # "UltraFeedback"
 )
 
-assign_model="gpt-5-nano"
+assign_model="openai/gpt-5-nano"
 
 counter=0
 

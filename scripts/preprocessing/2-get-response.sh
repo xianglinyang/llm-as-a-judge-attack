@@ -14,13 +14,11 @@ dataset_names=(
     # "MTBench"
     # "AlpacaEval"
     # "ArenaHard"
-    # "MLRBench"
-    "UltraFeedback"
+    "MLRBench"
+    # "UltraFeedback"
 )
 response_models=(
-    "gpt-4.1-mini"
-    # "gemini-1.5-flash-8b"
-    # "Qwen/Qwen3-14B"
+    "openai/gpt-4o"
 )
 
 # ------------------------------------------------------------------------------------------------

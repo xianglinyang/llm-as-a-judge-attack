@@ -8,26 +8,34 @@ dataset_names=(
     # "MTBench"
     # "AlpacaEval"
     # "ArenaHard"
-    # "MLRBench"
-    "UltraFeedback"
+    "MLRBench"
+    # "UltraFeedback"
 )
 response_models=(
-    "gpt-4.1-mini"
-    # "gemini-1.5-flash-8b"
-    # "Qwen/Qwen3-14B"
+    # "gpt-4.1-mini"
+    # "openai/gpt-4o"
+    "gemini-2.5-pro-preview-03-25"
+    "claude-3-7-sonnet-20250219"
+    "o4-mini"
 )
 
 # Judge Models
 judge_models=(
     "qwen/qwen3-235b-a22b-2507"
-    # "google/gemini-2.5-flash"
+    "meta-llama/llama-3.3-70b-instruct"
+    "deepseek/deepseek-r1-0528"
+    "openai/o3-mini"
+    "google/gemini-2.5-flash"
     # "openai/gpt-5"
-    # "meta-llama/llama-3.3-70b-instruct"
-    # "deepseek/deepseek-r1-0528"
+    # "google/gemini-2.5-pro"
+    # "anthropic/claude-opus-4"
+    # "x-ai/grok-4"
+    # "qwen/qwen3-max"
+    # "openai/o4-mini"
 )
 
 
-judge_type="pointwise"
+judge_type="mlr_bench"
 
 counter=0
 
