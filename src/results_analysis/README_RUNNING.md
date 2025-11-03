@@ -11,7 +11,10 @@
 ## metrics
 
 ```bash
+# chatbot leaderboard
 python -m src.results_analysis.plot_main_results --report_metric pool_mean
+# mlr bench case study
+python plot_multi_dimensional_comparison.py --show_table --group_by judge_model --filter judge_type=mlr_bench --exclude judge_model=gpt-5
 ```
 
 
@@ -103,5 +106,16 @@ python -m src.results_analysis.transfer_heatmap_visualization
 python -m src.defense.explanation_filter --filter strategy=simple_rewrite_improve,dataset_name=ArenaHard --exclude llm_agent_name=gpt-4.1-nano
 ```
 Then read the result from `/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/reports/`
+
+
+## Debias Model
+```bash
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=ArenaHard
+
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=alpaca_eval
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=arena_hard_auto
+```
+Then plot a bar chart.
 
 

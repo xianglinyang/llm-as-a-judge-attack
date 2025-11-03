@@ -511,7 +511,7 @@ def plot_summary_table_by_groups(grouped_data: Dict[Tuple, List[Dict]], group_by
 def main():
     parser = argparse.ArgumentParser(description="Multi-dimensional exploration strategy comparison")
     parser.add_argument("--metrics_dir", type=str, help="Directory containing metrics files", default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/metrics")
-    parser.add_argument("--group_by", type=str, default="strategy", 
+    parser.add_argument("--group_by", type=str, default="strategy,judge_model", 
                        help="Comma-separated list of dimensions to group by. Options: strategy, dataset, judge_model, llm_agent, response_model, budget, pool_size, alpha, lambda_reg, reward_type")
     parser.add_argument("--save_dir", type=str, help="Directory to save plots", default="./plots")
     parser.add_argument("--show_table", action="store_true", help="Show summary table")
