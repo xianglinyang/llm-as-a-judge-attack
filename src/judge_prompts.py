@@ -249,18 +249,33 @@ MT_BENCH_SYSTEM_PROMPT = """You are a helpful assistant."""
 
 MT_BENCH_PROMPT = """
 [Instruction]
-Please act as an impartial judge and evaluate the quality of the response provided by
-an AI assistant to the user question displayed below. Your evaluation should consider
-factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of
-detail of the response. Begin your evaluation by providing a short explanation. Be as
-objective as possible. After providing your explanation, you must rate the response
-on a scale of 1 to 10 by strictly following this format: "[[rating]]", for example:
-"Rating: [[5]]".
+Please act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question displayed below. Your evaluation should consider factors such as the helpfulness, relevance, accuracy, depth, creativity, and level of detail of the response. Begin your evaluation by providing a short explanation. Be as objective as possible. After providing your explanation, you must rate the response on a scale of 1 to 10 by strictly following this format: "[[rating]]", for example: "Rating: [[5]]".
+
 [Question]
 {question}
+
 [The Start of Assistant’s Answer]
 {answer}
 [The End of Assistant’s Answer]"""
+
+MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT = """You are a helpful assistant."""
+MT_BENCH_REFERENCE_GUIDED_PROMPT = """Please act as an impartial judge and evaluate the quality of the response provided by an AI assistant to the user question. Your evaluation should consider correctness and helpfulness. You will be given a reference answer and the assistant's answer. Your evaluation should focus on the assistant's answer to the second question. Begin your evaluation by comparing the assistant's answer with the reference answer. Identify and correct any mistakes. Be as objective as possible. After providing your explanation, you must rate the response on a scale of 1 to 10 by strictly following this format: "[[rating]]", for example: "Rating: [[5]]".
+
+<|The Start of Reference Answer|>
+### User:
+{question}
+ 
+### Reference answer:
+{ref_answer}
+<|The End of Reference Answer|>
+
+<|The Start of Assistant A's Conversation with User|>
+### User:
+{question}
+
+### Assistant A:
+{answer}
+<|The End of Assistant A's Conversation with User|>"""
 
 
 # MLR Bench Judge

@@ -10,7 +10,7 @@ import re
 import logging
 import time
 
-from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT, PAPER_OVERALL_RUBRIC
+from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT, MT_BENCH_REFERENCE_GUIDED_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT, PAPER_OVERALL_RUBRIC
 from src.llm_zoo import load_model
 from src.utils import str2json
 
@@ -26,7 +26,9 @@ class JudgeType(Enum):
     ALPACA_EVAL = "alpaca_eval"
     ARENA_HARD_AUTO = "arena_hard_auto"
     MT_BENCH = "mt_bench"
+    MT_BENCH_REFERENCE_GUIDED = "mt_bench_reference_guided"
     MLR_BENCH = "mlr_bench"
+
 
 def get_judge_type(judge_type_str: str):
     if judge_type_str == "pointwise":
@@ -43,6 +45,8 @@ def get_judge_type(judge_type_str: str):
         return JudgeType.MT_BENCH
     elif judge_type_str == "mlr_bench":
         return JudgeType.MLR_BENCH
+    elif judge_type_str == "mt_bench_reference_guided":
+        return JudgeType.MT_BENCH_REFERENCE_GUIDED
     else:
         raise ValueError(f"Invalid judge type: {judge_type_str}")
 
@@ -423,6 +427,53 @@ class MTBenchModel(JudgeModelABC):
         formatted_prompts = [MT_BENCH_PROMPT.format(question=input_q, answer=response) for input_q, response in zip(q_list, response_list)]
         start_time = time.time()
         call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_SYSTEM_PROMPT, return_cost=True)
+        end_time = time.time()
+        scores = []
+        responses = []
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            if call_result is None:
+                # Handle failed API calls
+                scores.append(0)
+                responses.append("Error: API call failed - no response received")
+                continue
+                
+            response = call_result.response
+            cost = call_result.cost
+            input_tokens = call_result.input_tokens
+            output_tokens = call_result.output_tokens
+            total_cost += cost
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
+            outcome = get_mt_bench_score(response)
+            scores.append(outcome)
+            responses.append(response)
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
+        return scores, responses
+
+class MTBenchReferenceGuidedModel(JudgeModelABC):
+    def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
+        super().__init__(judge_type, judge_model_backbone)
+
+    def get_score(self, input_q, response, ref_answer) -> tuple[int, str]:
+        formatted_prompt = MT_BENCH_REFERENCE_GUIDED_PROMPT.format(question=input_q, answer=response, ref_answer=ref_answer)
+        call_result = self.model.invoke(formatted_prompt, system_prompt=MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
+        score = get_mt_bench_score(response)
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
+        return score, response
+    
+    async def batch_pointwise_score(self, q_list, response_list, ref_answer_list) -> tuple[list[int], list[str]]:
+        formatted_prompts = [MT_BENCH_REFERENCE_GUIDED_PROMPT.format(question=input_q, answer=response, ref_answer=ref_answer) for input_q, response, ref_answer in zip(q_list, response_list, ref_answer_list)]
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT, return_cost=True)
         end_time = time.time()
         scores = []
         responses = []
