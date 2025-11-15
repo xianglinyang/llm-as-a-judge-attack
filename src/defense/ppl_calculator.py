@@ -6,7 +6,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import numpy as np
 from tqdm import tqdm
 
-class PPLFilter:
+from src.defense.ppl_histogram import plot_ppl_histogram
+
+
+class PPLCalculator:
     """
     Implements a windowed Perplexity (PPL) filter.
 
@@ -123,10 +126,11 @@ class PPLFilter:
         
         return candidate_max_ppl > self.threshold
 
-# --- Example Usage ---
+
+
 if __name__ == "__main__":
     # 1. Initialize the filter
-    ppl_filter = PPLFilter(model_id="gpt2", window_size=32)
+    ppl_calculator = PPLCalculator(model_id="gpt2", window_size=32)
 
     # 2. Define baseline (clean) responses for calibration
     # These should be examples of normal, expected model outputs.
@@ -137,18 +141,11 @@ if __name__ == "__main__":
         "Artificial intelligence is a branch of computer science that aims to create machines capable of intelligent behavior.",
     ]
 
-    # 3. Calibrate the filter using the baseline data
-    ppl_filter.calibrate(baseline_responses)
-    print("-" * 50)
-    
-    # 4. Test the filter on different inputs
+    labels = [0, 0, 0, 0]
 
-    # A normal, clean response (should NOT be filtered)
-    clean_response = "Great question! The best exercises for beginners are those that are simple, effective, and help build a solid foundation of strength, flexibility, and cardiovascular fitness. Here are some excellent beginner-friendly exercises across different categories:\n\n### 1. **Bodyweight Exercises**\nThese require no equipment and are perfect for building strength and learning proper movement patterns.\n- **Squats:** Great for legs and glutes.\n- **Push-ups (modified on knees if needed):** Build upper body and core strength.\n- **Lunges:** Improve balance and leg strength.\n- **Planks:** Strengthen the core.\n- **Glute bridges:** Activate and strengthen the glutes and lower back.\n\n### 2. **Cardiovascular Exercises**\nGood for improving endurance and heart health.\n- **Walking:** Easy to start and low impact.\n- **Jogging or light running:** Once comfortable with walking.\n- **Cycling:** Low-impact cardio option.\n- **Jumping jacks:** Great full-body warm-up and cardio move.\n- **Swimming:** Full-body, low-impact cardio.\n\n### 3. **Flexibility and Mobility**\nHelps prevent injury and improve range of motion.\n- **Basic stretching:** Hamstrings, quads, calves, shoulders.\n- **Yoga or beginner yoga flows:** Enhance flexibility and balance.\n\n### 4. **Basic Strength Training with Equipment**\nIf you have access to equipment like dumbbells or resistance bands:\n- **Dumbbell rows:** For back and arms.\n- **Bicep curls:** For arm strength.\n- **Resistance band pull-aparts:** For shoulder stability.\n\n---\n\n### Tips for Beginners:\n- Start slow and focus on learning proper form.\n- Aim for 2-3 sessions per week, gradually increasing frequency and intensity.\n- Warm up before exercising and cool down/stretch after.\n- Listen to your body to avoid injury.\n\nIf you want, I can help you create a simple beginner workout routine!"
-    print(f"Testing a clean response:\n'{clean_response}'")
-    is_filtered_clean = ppl_filter.should_filter(clean_response)
-    print(f"Result: {'FILTERED' if is_filtered_clean else 'PASSED'}\n")
+    ppl_list = [ppl_calculator._get_max_windowed_ppl(response) for response in baseline_responses]
 
+    plot_ppl_histogram(ppl_list, labels, title="PPL Test", max_ppl=1000, save_path="ppl_histogram.png")
 
     
     
