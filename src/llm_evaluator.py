@@ -9,8 +9,9 @@ from abc import abstractmethod, ABC
 import re
 import logging
 import time
+import random
 
-from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT, MT_BENCH_REFERENCE_GUIDED_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT, PAPER_OVERALL_RUBRIC
+from src.judge_prompts import POINTWISE_EVALUATION_PROMPT, PAIRWISE_EVALUATION_PROMPT, ARENA_HARD_AUTO_PROMPT, MT_BENCH_PROMPT, MT_BENCH_SYSTEM_PROMPT, MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT, MT_BENCH_REFERENCE_GUIDED_PROMPT, ALPACA_EVAL_SYSTEM_PROMPT, ALPACA_EVAL_PROMPT, ARENA_HARD_AUTO_SYSTEM_PROMPT, PAIRWISE_FINE_GRAINED_EVALUATION_PROMPT, PAPER_OVERALL_RUBRIC, POINTWISE_EVALUATION_PROMPT_IGNORE_BIAS_VARIANT, POINTWISE_EVALUATION_PROMPT_RANDOMIZED, POINTWISE_EVALUATION_PROMPT_RANDOMIZED_IGNORE_BIAS_VARIANT
 from src.llm_zoo import load_model
 from src.utils import str2json
 
@@ -21,6 +22,8 @@ logger = logging.getLogger(__name__)
 # ------------------------------------------------------------
 class JudgeType(Enum):
     POINTWISE = "pointwise"
+    POINTWISE_RANDOMIZED = "pointwise_randomized"
+    POINTWISE_IGNORE_BIAS = "pointwise_ignore_bias"
     PAIRWISE = "pairwise"
     PAIRWISE_FINE_GRAINED = "pairwise_fine_grained"
     ALPACA_EVAL = "alpaca_eval"
@@ -33,6 +36,10 @@ class JudgeType(Enum):
 def get_judge_type(judge_type_str: str):
     if judge_type_str == "pointwise":
         return JudgeType.POINTWISE
+    elif judge_type_str == "pointwise_randomized":
+        return JudgeType.POINTWISE_RANDOMIZED
+    elif judge_type_str == "pointwise_ignore_bias":
+        return JudgeType.POINTWISE_IGNORE_BIAS
     elif judge_type_str == "pairwise":
         return JudgeType.PAIRWISE
     elif judge_type_str == "pairwise_fine_grained":
@@ -94,6 +101,121 @@ class PointwiseJudgeModel(JudgeModelABC):
     async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         """Returns the model's confidence that the summary is its own output."""
         formatted_prompts = [POINTWISE_EVALUATION_PROMPT.format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
+        scores = []
+        explanations = []
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            try:
+                response = call_result.response
+                cost = call_result.cost
+                input_tokens = call_result.input_tokens
+                output_tokens = call_result.output_tokens
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
+                json_response = str2json(response)
+                score = int(json_response["score"])
+                explanation = json_response["feedback"]
+                scores.append(score)
+                explanations.append(explanation)
+            except:
+                scores.append(0)
+                explanations.append("Error: Failed to parse the response as a JSON object.")
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
+        return scores, explanations
+
+class RandomizedPointwiseJudgeModel(JudgeModelABC):
+    def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
+        super().__init__(judge_type, judge_model_backbone)
+
+    def get_score(self, input_q, response) -> tuple[int, str]:
+        """Returns the model's confidence that the summary is its own output using randomized prompt."""
+        selected_prompt = random.choice(POINTWISE_EVALUATION_PROMPT_RANDOMIZED)
+        formatted_prompt = selected_prompt.format(INPUTS=input_q, OUTPUT=response)
+        call_result = self.model.invoke(formatted_prompt, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
+        try:
+            json_response = str2json(response)
+            score = int(json_response["score"])
+            feedback = json_response["feedback"]
+        except:
+            score = 0
+            feedback = "Error: Failed to parse the response as a JSON object."
+            print(f"Error: Failed to parse the response as a JSON object. {response}")
+        
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
+        return score, feedback
+    
+    async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
+        """Returns the model's confidence that the summary is its own output using randomized prompt."""
+        formatted_prompts = [random.choice(POINTWISE_EVALUATION_PROMPT_RANDOMIZED).format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
+        start_time = time.time()
+        call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
+        end_time = time.time()
+        scores = []
+        explanations = []
+        total_cost = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        for call_result in call_results:
+            try:
+                response = call_result.response
+                cost = call_result.cost
+                input_tokens = call_result.input_tokens
+                output_tokens = call_result.output_tokens
+                total_cost += cost
+                total_input_tokens += input_tokens
+                total_output_tokens += output_tokens
+
+                json_response = str2json(response)
+                score = int(json_response["score"])
+                explanation = json_response["feedback"]
+                scores.append(score)
+                explanations.append(explanation)
+            except:
+                scores.append(0)
+                explanations.append("Error: Failed to parse the response as a JSON object.")
+        logger.info(f"Total cost: {total_cost}, Total input tokens: {total_input_tokens}, Total output tokens: {total_output_tokens} for number of questions: {len(q_list)}")
+        logger.info(f"Time taken: {(end_time - start_time)/60} minutes")
+        return scores, explanations
+
+class IgnoreBiasPointwiseJudgeModel(JudgeModelABC):
+    def __init__(self, judge_type: JudgeType, judge_model_backbone: str):
+        super().__init__(judge_type, judge_model_backbone)
+
+    def get_score(self, input_q, response) -> tuple[int, str]:
+        """Returns the model's confidence that the summary is its own output using ignore bias prompt."""
+        formatted_prompt = POINTWISE_EVALUATION_PROMPT_IGNORE_BIAS_VARIANT.format(INPUTS=input_q, OUTPUT=response)
+        call_result = self.model.invoke(formatted_prompt, return_cost=True)
+        response = call_result.response
+        cost = call_result.cost
+        input_tokens = call_result.input_tokens
+        output_tokens = call_result.output_tokens
+        try:
+            json_response = str2json(response)
+            score = int(json_response["score"])
+            feedback = json_response["feedback"]
+        except:
+            score = 0
+            feedback = "Error: Failed to parse the response as a JSON object."
+            print(f"Error: Failed to parse the response as a JSON object. {response}")
+        
+        logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
+        return score, feedback
+    
+    async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
+        """Returns the model's confidence that the summary is its own output using ignore bias prompt."""
+        formatted_prompts = [POINTWISE_EVALUATION_PROMPT_IGNORE_BIAS_VARIANT.format(INPUTS=input_q, OUTPUT=response) for input_q, response in zip(q_list, response_list)]
         start_time = time.time()
         call_results = await self.model.batch_invoke(formatted_prompts, return_cost=True)
         end_time = time.time()
@@ -591,6 +713,10 @@ class MLRBenchModel(JudgeModelABC):
 def load_judge_model(judge_type, judge_model_backbone):
     if judge_type == JudgeType.POINTWISE:
         return PointwiseJudgeModel(judge_type, judge_model_backbone)
+    elif judge_type == JudgeType.POINTWISE_RANDOMIZED:
+        return RandomizedPointwiseJudgeModel(judge_type, judge_model_backbone)
+    elif judge_type == JudgeType.POINTWISE_IGNORE_BIAS:
+        return IgnoreBiasPointwiseJudgeModel(judge_type, judge_model_backbone)
     elif judge_type == JudgeType.PAIRWISE:
         return PairwiseJudgeModel(judge_type, judge_model_backbone)
     elif judge_type == JudgeType.PAIRWISE_FINE_GRAINED:
@@ -632,12 +758,26 @@ if __name__ == "__main__":
     # s1, e1 = pairwise_judge.get_score(question, target_response_1, target_response_2)
     # print(f"Pairwise score given by gemini-2.0-flash: {s1}, feedback: {e1}")
 
+    # # ------------------------------------------------------------
+    # # Test Arena Hard Auto Model
+    # # ------------------------------------------------------------
+    # arena_hard_auto_judge = load_judge_model(JudgeType.ARENA_HARD_AUTO, "gemini-2.5-flash")
+    # s1, e1 = arena_hard_auto_judge.get_score(question, target_response_1, target_response_2)
+    # print(f"ArenaHardAuto score given by gemini-2.0-flash: {s1}, feedback: {e1}")
+
     # ------------------------------------------------------------
-    # Test Arena Hard Auto Model
+    # Test Randomized Pointwise Judge Model
     # ------------------------------------------------------------
-    arena_hard_auto_judge = load_judge_model(JudgeType.ARENA_HARD_AUTO, "gemini-2.5-flash")
-    s1, e1 = arena_hard_auto_judge.get_score(question, target_response_1, target_response_2)
-    print(f"ArenaHardAuto score given by gemini-2.0-flash: {s1}, feedback: {e1}")
+    randomized_judge = load_judge_model(JudgeType.POINTWISE_RANDOMIZED, "gpt-4o-mini")
+    s1, e1 = randomized_judge.get_score(question, target_response_1)
+    print(f"Randomized Pointwise score: {s1}, feedback: {e1}")
+
+    # ------------------------------------------------------------
+    # Test Ignore Bias Pointwise Judge Model
+    # ------------------------------------------------------------
+    ignore_bias_judge = load_judge_model(JudgeType.POINTWISE_IGNORE_BIAS, "gpt-4o-mini")
+    s2, e2 = ignore_bias_judge.get_score(question, target_response_1)
+    print(f"Ignore Bias Pointwise score: {s2}, feedback: {e2}")
 
 
     
