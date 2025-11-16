@@ -1,138 +1,55 @@
-'''
-This script is used to perform style control for LLM-as-a-Judge attack trajectories. We would like to know the effect of style on the final score. If we remove the style, the score will be higher or lower?
-'''
+"""
+As reviewer suggested, we further use all the bias features to control the style.
+"""
 import re
 import argparse
 import pandas as pd
 import logging
-from sklearn.linear_model import LinearRegression
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
+from src.feature_analysis.feature_extractor import extract_features, get_feature_names
+
 from src.logging_utils import setup_logging
 from src.results_analysis.results_loader.trajectory_loader import load_trajectory_directory, parse_filter_criteria, parse_exclude_criteria
+from src.defense.style_control import trajectories_to_dataframe_with_one_shot, trajectories_to_dataframe
 
 logger = logging.getLogger(__name__)
 
 # -------------------------
-# 1. Feature extraction
+# 2. Style-control model V2
 # -------------------------
 
-def extract_style_features(text):
-    """Extract simple style features from an answer string."""
-    tokens = text.split()
-    n_tokens = len(tokens)
-    n_headers = len(re.findall(r"^#+", text, flags=re.MULTILINE))
-    n_lists = len(re.findall(r"(^\s*[-*] )|(^\s*\d+\.)", text, flags=re.MULTILINE))
-    n_bold = len(re.findall(r"\*\*.*?\*\*", text))
-    return {
-        "len_tok": n_tokens,
-        "n_headers": n_headers,
-        "n_lists": n_lists,
-        "n_bold": n_bold,
-    }
-
-def add_style_features(df, text_col="answer"):
-    feats = df[text_col].apply(extract_style_features).apply(pd.Series)
-    return pd.concat([df, feats], axis=1)
-
-# -------------------------
-# 2. Style-control model
-# -------------------------
-
-class StyleControlAbsolute:
+class StyleControlAbsoluteV2:
     def __init__(self):
         self.scaler = None
         self.model = None
         self.features = None
-        self.nonlinear_model = None
 
-    def fit(self, df, features=("len_tok","n_headers","n_lists","n_bold"), score_col="score"):
+    def fit(self, df, features=get_feature_names(), score_col="score"):
         self.features = list(features)
         X = df[self.features].to_numpy()
         y = df[score_col].to_numpy()
         self.scaler = StandardScaler()
         Xs = self.scaler.fit_transform(X)
-        self.model = LinearRegression()
+        
+        self.model = KernelRidge(alpha=0.5, kernel="rbf", gamma=0.01)
         self.model.fit(Xs, y)
         return self.model
-    
-    def nonlinear_fit(self, df, features=("len_tok","n_headers","n_lists","n_bold"), score_col="score"):
-        self.features = list(features)
-        X = df[self.features].to_numpy()
-        y = df[score_col].to_numpy()
-        self.scaler = StandardScaler()
-        Xs = self.scaler.fit_transform(X)
-        self.nonlinear_model = KernelRidge(alpha=0.5, kernel="rbf", gamma=0.01)
-        self.nonlinear_model.fit(Xs, y)
-        return self.nonlinear_model
-    
-    def nonlinear_style_adjust_scores(self, df, score_col="score"):
-        X = df[self.features].to_numpy()
-        y = df[score_col].to_numpy()
-        Xs = self.scaler.transform(X)
-        style_contrib = self.nonlinear_model.predict(Xs) - y.mean()
-        return y - style_contrib
 
     def style_adjust_scores(self, df, score_col="score"):
         X = df[self.features].to_numpy()
         y = df[score_col].to_numpy()
         Xs = self.scaler.transform(X)
-        style_contrib = self.model.predict(Xs) - self.model.intercept_
+        style_contrib = self.model.predict(Xs) - y.mean()
         return y - style_contrib
 
     def report_coeffs(self):
         return pd.DataFrame({
             "feature": self.features,
-            "coef": self.model.coef_
+            "coef": self.model.dual_coef_
         })
-    
-    def report_nonlinear_coeffs(self):
-        # KernelRidge does not have coefficients in the same way LinearRegression does.
-        # You would need a different way to interpret feature importance,
-        # or remove this method if direct coefficients are not available.
-        return pd.DataFrame({
-            "feature": self.features,
-            "coef": "N/A (Kernel model)" # Placeholder
-        })
-
-def trajectories_to_dataframe(trajectories):
-    '''Convert trajectories to DataFrame
-    Example dataset
-    data = [
-        {"question": "Q1", "attack": "baseline", "answer": "Answer is 42.", "score": 3.0},
-        {"question": "Q1", "attack": "BITE", "answer": "## Final Answer\nThe answer is 42.\n- It is correct.", "score": 4.2},
-        {"question": "Q2", "attack": "baseline", "answer": "Paris is the capital of France.", "score": 3.5},
-        {"question": "Q2", "attack": "BITE", "answer": "**Answer:** Paris is the capital of France.\n\nIt is well-known.", "score": 4.0},
-    ]
-    '''
-    data = []
-    for traj in trajectories:
-        for item in traj.trajectories:
-            data.append({
-                "question": item.question,
-                "attack": traj.metadata.strategy,
-                "answer": item.final_answer,
-                "score": item.final_score
-            })
-    logger.info(f"Loaded {len(data)} trajectories")
-    return pd.DataFrame(data)
-
-def trajectories_to_dataframe_with_one_shot(trajectories):
-    '''Convert trajectories to DataFrame with one shot'''
-    data = []
-    for traj in trajectories:
-        for item in traj.trajectories:
-            if len(item.history) >1:
-                data.append({
-                    "question": item.question,
-                    "attack": traj.metadata.strategy+"_one_shot",
-                    "answer": item.history[1].answer,
-                    "score": item.history[1].score
-                })
-    logger.info(f"Loaded {len(data)} trajectories")
-    return pd.DataFrame(data)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Style control for LLM-as-a-Judge attack trajectories")
@@ -150,8 +67,9 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    setup_logging(task_name="style_control")
-    
+    setup_logging(task_name="style_control_v2")
+
+
     # 0. Parse filter and exclude criteria
     general_filter_criteria = parse_filter_criteria(args.filter) if args.filter else {}
     general_exclude_criteria = parse_exclude_criteria(args.exclude) if args.exclude else {}
@@ -203,20 +121,23 @@ if __name__ == "__main__":
     random_train_df, random_test_df = train_test_split(random_df, test_size=0.2, random_state=42)
     holistic_rewrite_one_shot_train_df, holistic_rewrite_one_shot_test_df = train_test_split(holistic_rewrite_one_shot_df, test_size=0.2, random_state=42)
 
-    train_df = pd.concat([ucb_train_df, holistic_rewrite_train_df, random_train_df, holistic_rewrite_one_shot_train_df])
-    test_df = pd.concat([ucb_test_df, holistic_rewrite_test_df, random_test_df, holistic_rewrite_one_shot_test_df])
+    train_df = pd.concat([ucb_train_df, holistic_rewrite_train_df, random_train_df, holistic_rewrite_one_shot_train_df], ignore_index=True)
+    test_df = pd.concat([ucb_test_df, holistic_rewrite_test_df, random_test_df, holistic_rewrite_one_shot_test_df], ignore_index=True)
 
     logging.info(f"Train size: {len(train_df)}, Test size: {len(test_df)}")
 
     # 3. train the style-control model
     # 3.1. Extract style features
-    train_df = add_style_features(train_df, text_col="answer")
-    test_df = add_style_features(test_df, text_col="answer")
+    train_features = extract_features(train_df["answer"].tolist())
+    test_features = extract_features(test_df["answer"].tolist())
+
+    train_df = pd.concat([train_df, train_features], axis=1)
+    test_df = pd.concat([test_df, test_features], axis=1)
 
     # 3.2. Fit style-control regression
-    sc = StyleControlAbsolute()
-    sc.fit(train_df, features=["len_tok","n_headers","n_lists","n_bold"], score_col="score")
-    print("Style coefficients:\n", sc.report_coeffs())
+    sc = StyleControlAbsoluteV2()
+    sc.fit(train_df, features=get_feature_names(), score_col="score")
+    # print("Style coefficients:\n", sc.report_coeffs().sort_values(by="coef", ascending=False))
 
     # 3.3. Style-adjust scores
     train_df["score_sc"] = sc.style_adjust_scores(train_df, score_col="score")
@@ -238,16 +159,3 @@ if __name__ == "__main__":
         print("Score before style control:", group["score"].mean())
         print("Score after style control:", group["score_sc"].mean())
     
-    # 4. train the nonlinear style-control model
-    sc.nonlinear_fit(train_df, features=["len_tok","n_headers","n_lists","n_bold"], score_col="score")
-    train_df["score_sc_nonlinear"] = sc.nonlinear_style_adjust_scores(train_df, score_col="score")
-    test_df["score_sc_nonlinear"] = sc.nonlinear_style_adjust_scores(test_df, score_col="score")
-
-    # detailed results, ucb
-    train_df_grouped = train_df.groupby("attack")
-    test_df_grouped = test_df.groupby("attack")
-    for attack, group in test_df_grouped:
-        print("="*50)
-        print(f"Attack: {attack}")
-        print("Score before nonlinear style control:", group["score"].mean())
-        print("Score after nonlinear style control:", group["score_sc_nonlinear"].mean())
