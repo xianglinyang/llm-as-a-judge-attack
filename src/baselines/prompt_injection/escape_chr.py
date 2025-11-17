@@ -50,8 +50,6 @@ async def main():
                        help="Path to save analysis results")
     parser.add_argument("--save_trajectory_path", type=str, default="/data2/xianglin/A40/llm-as-a-judge-attack/trajectories",
                        help="Path to save trajectory results")
-    parser.add_argument("--eval_num", type=int, default=10,
-                       help="Number of samples to evaluate (for testing)")
         
     
     args = parser.parse_args()
@@ -85,8 +83,6 @@ async def main():
             
         logger.info(f"\nProcessing trajectory {traj_idx + 1}/{len(ucb_trajectories)}")
 
-        traj.trajectories = traj.trajectories[:args.eval_num]
-        
         # Extract data for processing from this trajectory
         original_answers = [item.initial_answer for item in traj.trajectories]
         original_scores = [item.initial_score for item in traj.trajectories]
@@ -160,7 +156,7 @@ async def main():
             "response_model_name": traj.metadata.response_model_name,
             "budget": 1,
             "pool_size": 1,
-            "eval_num": args.eval_num,
+            "eval_num": len(traj.trajectories),
             "reward_type": traj.metadata.reward_type,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "time_taken": time.time() - start_time,
