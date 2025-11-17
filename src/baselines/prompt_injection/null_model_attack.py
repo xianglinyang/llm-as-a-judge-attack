@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Import null model strings from null_model.py
 from src.baselines.prompt_injection.null_model import (
+    pointwise_null_model,
     alpaca_eval_null_model,
     alpaca_eval_null_model_RS,
     arenahard_null_model,
@@ -29,6 +30,7 @@ from src.baselines.prompt_injection.null_model import (
 )
 
 NULL_MODEL_MAPPING = {
+    "pointwise": pointwise_null_model,
     "alpaca_eval": alpaca_eval_null_model,
     "alpaca_eval_rs": alpaca_eval_null_model_RS,
     "arenahard": arenahard_null_model,
@@ -43,23 +45,32 @@ class NullModelAttack(BasePromptInjectionBaseline):
     def __init__(self, judge_type: str, use_rs_variant: bool = False):
         """
         Args:
-            judge_type: The judge type (e.g., "alpaca_eval", "arenahard")
+            judge_type: The judge type (e.g., "alpaca_eval", "arenahard", "mt_bench", "mlr_bench")
             use_rs_variant: Whether to use the RS (random suffix) variant
         """
         self.judge_type = judge_type.lower()
         self.use_rs_variant = use_rs_variant
         
+        # Normalize judge type to mapping key
+        # Handle special cases: mt_bench -> mtbench, mlr_bench -> pointwise
+        normalized_type = self.judge_type
+        if normalized_type == "mt_bench" or normalized_type == "mt_bench_reference_guided":
+            normalized_type = "mtbench"
+        elif normalized_type == "mlr_bench":
+            # MLR bench uses pointwise null model
+            normalized_type = "pointwise"
+        
         # Determine the key for null model mapping
-        key = self.judge_type
+        key = normalized_type
         if self.use_rs_variant:
             key += "_rs"
             
         if key not in NULL_MODEL_MAPPING:
             # Fallback to non-RS variant if RS not available
-            key = self.judge_type
+            key = normalized_type
             if key not in NULL_MODEL_MAPPING:
-                logger.warning(f"No null model found for judge type: {self.judge_type}, using arenahard as fallback")
-                key = "arenahard"
+                logger.warning(f"No null model found for judge type: {self.judge_type}, using pointwise as fallback")
+                key = "pointwise"
                 
         self.null_model_string = NULL_MODEL_MAPPING[key]
     
@@ -88,8 +99,7 @@ async def main():
                        help="Path to save analysis results")
     parser.add_argument("--save_trajectory_path", type=str, default="/data2/xianglin/A40/llm-as-a-judge-attack/trajectories",
                        help="Path to save trajectory results")
-    parser.add_argument("--use_rs_variant", action="store_true",
-                       help="Use RS (random suffix) variant of null models")
+    parser.add_argument("--use_rs_variant", default=0, help="Use RS (random suffix) variant of null models")
          
     
     args = parser.parse_args()
@@ -101,7 +111,7 @@ async def main():
     general_filter_criteria = parse_filter_criteria(args.filter) if args.filter else {}
     general_exclude_criteria = parse_exclude_criteria(args.exclude) if args.exclude else {}
 
-    # 1. Load UCB trajectories (focus on pairwise evaluations only)
+    # 1. Load UCB trajectories
     ucb_filter_criteria = parse_filter_criteria("strategy=ucb")
     ucb_filter_criteria.update(general_filter_criteria)
 
@@ -114,17 +124,13 @@ async def main():
         exclude_criteria=general_exclude_criteria
     )
 
-    # Filter to only pairwise judge types
-    pairwise_judge_types = ["alpaca_eval", "arenahard"]
-    ucb_trajectories = [traj for traj in ucb_trajectories if traj.metadata.judge_type in pairwise_judge_types]
-
     # Log settings: judge type+dataset name+judge backbone+llm agent name+baseline response model name+response model name
-    logging.info(f"Loaded {len(ucb_trajectories)} UCB trajectories (pairwise only)")
+    logging.info(f"Loaded {len(ucb_trajectories)} UCB trajectories")
     for traj in ucb_trajectories:
         logging.info(f"{traj.metadata.judge_type}, {traj.metadata.dataset_name}, {traj.metadata.judge_backbone}, {traj.metadata.llm_agent_name}, Baseline: {traj.metadata.baseline_response_model_name}, ({traj.metadata.answer_position})")
 
     if not ucb_trajectories:
-        logger.error("No pairwise UCB trajectories found. Please check your filter criteria.")
+        logger.error("No UCB trajectories found. Please check your filter criteria.")
         return
 
     for traj_idx, traj in enumerate(ucb_trajectories):
@@ -145,16 +151,21 @@ async def main():
         judge_model_name = get_implementation_name(traj.metadata.judge_backbone)
         logger.info(f"  Evaluating {len(new_answers)} null model attack answers...")
 
-        # For null model attack, we only support pairwise evaluations
-        if judge_type in [JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        # Handle different judge types similar to naive.py
+        # if pointwise, baseline response is the original answer
+        if judge_type in [JudgeType.POINTWISE]:
+            reward_calculator = create_reward_calculator(judge_type, judge_model_name, "absolute")
+            attack_scores, _, attack_explanations = await reward_calculator.calculate_batch_reward(questions, new_answers, original_scores)
+        elif judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
             reward_calculator = create_reward_calculator(judge_type, judge_model_name, "absolute", answer_position=traj.metadata.answer_position)
             baseline_dataset = load_dataset_for_exploration(args.data_dir, traj.metadata.dataset_name, traj.metadata.baseline_response_model_name, traj.metadata.judge_backbone)
             baseline_dataset_mapping = {item['instruction']: item['output'] for item in baseline_dataset}
             baseline_responses = [baseline_dataset_mapping[question] for question in questions]
             attack_scores, _, attack_explanations = await reward_calculator.calculate_batch_reward(questions, new_answers, original_scores, baseline_responses)
         else:
-            logger.warning(f"Null model attack only supports pairwise evaluations, skipping {traj.metadata.judge_type}")
-            continue
+            logger.warning(f"Unknown judge type: {traj.metadata.judge_type}, defaulting to pointwise evaluation")
+            reward_calculator = create_reward_calculator(judge_type, judge_model_name, "absolute")
+            attack_scores, _, attack_explanations = await reward_calculator.calculate_batch_reward(questions, new_answers, original_scores)
         
         # Create result items for this trajectory
         traj_results = []
@@ -171,7 +182,7 @@ async def main():
                     "final_explanation": traj.trajectories[i].history[0].explanation,
                     "final_response": traj.trajectories[i].initial_answer,
                     "exploration_length": 1,
-                    "skip": 1,
+                    "skip": 0,
                 }
             else:
                 result_item = {
@@ -179,7 +190,7 @@ async def main():
                     "instruction": traj.trajectories[i].question,
                     "output": new_answers[i],
                     "original_score": float(traj.trajectories[i].initial_score),
-                    "original_explanation": traj.trajectories[i].initial_explanation,
+                    "original_explanation": traj.trajectories[i].history[0].explanation,
                     "final_score": float(attack_scores[i]),
                     "final_explanation": attack_explanations[i],
                     "final_response": new_answers[i],

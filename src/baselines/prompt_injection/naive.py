@@ -116,6 +116,7 @@ async def main():
         traj_results = []
         for i in range(len(traj.trajectories)):
             original_score = traj.trajectories[i].initial_score
+            # All items from UCB trajectories were explored, so skip=0 for all
             if original_score >= naive_attack_scores[i]:
                 result_item = {
                     "category": traj.trajectories[i].category,
@@ -127,7 +128,7 @@ async def main():
                     "final_explanation": traj.trajectories[i].history[0].explanation,
                     "final_response": traj.trajectories[i].initial_answer,
                     "exploration_length": 1,
-                    "skip": 1,
+                    "skip": 0,  # All items were explored in UCB, so skip=0
                 }
             else:
                 result_item = {
@@ -140,7 +141,7 @@ async def main():
                     "final_explanation": naive_attack_explanations[i],
                     "final_response": new_answers[i],
                     "exploration_length": 2,
-                    "skip": 0,
+                    "skip": 0,  # All items were explored in UCB, so skip=0
                 }
             traj_results.append(result_item)
     

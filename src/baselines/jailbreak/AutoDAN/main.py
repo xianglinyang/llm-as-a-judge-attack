@@ -110,7 +110,7 @@ def extract_autodan_result_from_trajectories(question_list, init_response_list, 
                 "final_response": init_response,
                 "baseline_response": baseline_response,
                 "exploration_length": 1,
-                "skip": 1,
+                "skip": 0,
             }
         else:
             # Get the final best item (highest scoring item in the trajectory)
@@ -118,10 +118,6 @@ def extract_autodan_result_from_trajectories(question_list, init_response_list, 
             
             # Calculate exploration length from the history
             exploration_length = len(final_best_item.get("history", [(original_score, original_explanation, init_response, "init")]))
-            
-            # Determine if we should skip (no improvement)
-            improvement = float(final_best_item["score"]) - float(original_score)
-            skip = 1 if improvement <= 0 else 0
             
             result = {
                 "category": category,
@@ -134,7 +130,7 @@ def extract_autodan_result_from_trajectories(question_list, init_response_list, 
                 "final_response": final_best_item["answer"],  # This contains base_answer + best_suffix
                 "baseline_response": baseline_response,
                 "exploration_length": exploration_length,
-                "skip": skip,
+                "skip": 0,
             }
         
         test_results.append(result)
@@ -761,7 +757,7 @@ async def main():
                        help="Path to save trajectory results")
     parser.add_argument("--save_metrics_path", type=str, default="/data2/xianglin/A40/llm-as-a-judge-attack/metrics",
                        help="Path to save metrics results")
-    parser.add_argument("--steps", type=int, default=5,
+    parser.add_argument("--steps", type=int, default=25,
                        help="Number of generations to run")
     parser.add_argument("--population_size", type=int, default=8,
                        help="Population size for genetic algorithm")

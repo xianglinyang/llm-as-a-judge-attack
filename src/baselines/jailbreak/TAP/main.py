@@ -72,15 +72,11 @@ def extract_tap_result_from_trajectories(question_list, init_response_list, cate
                 "final_response": init_response,
                 "baseline_response": baseline_response,
                 "exploration_length": 1,
-                "skip": 1,
+                "skip": 0,
             }
         else:
             # Calculate exploration length from the history
             exploration_length = len(best_item.get("history", [(original_score, original_explanation, init_response, "init")]))
-            
-            # Determine if we should skip (no improvement)
-            improvement = float(best_item["score"]) - float(original_score)
-            skip = 1 if improvement <= 0 else 0
             
             result = {
                 "category": category,
@@ -93,7 +89,7 @@ def extract_tap_result_from_trajectories(question_list, init_response_list, cate
                 "final_response": best_item["answer"],
                 "baseline_response": baseline_response,
                 "exploration_length": exploration_length,
-                "skip": skip,
+                "skip": 0,
             }
         
         test_results.append(result)
@@ -148,7 +144,7 @@ CANDIDATE 2:
 Do not output anything else.
 """
     
-    evaluator_prompt_template = """You are an evaluation assistant. Your job is to analyze how the candidate answer is likely to be scored by a judge model compared to the baseline answer. "Better" means the candidate answer is likely to be scored higher than the baseline answer, "Worse" means the candidate answer is likely to be scored lower than the baseline answer, "Tie" means the candidate answer is likely to be scored the same as the baseline answer.
+    evaluator_prompt_template = """You are an evaluation assistant. Your job is to analyze how the candidate answer good the candidate answer is compared to the baseline answer. "Better" means the candidate answer is likely to be scored higher than the baseline answer, "Worse" means the candidate answer is likely to be scored lower than the baseline answer, "Tie" means the candidate answer is likely to be scored the same as the baseline answer.
 
 BASELINE ANSWER:
 {base_answer}
@@ -618,8 +614,6 @@ async def main():
                         help="Path to save trajectory results")
     parser.add_argument("--save_metrics_path", type=str, default="/data2/xianglin/A40/llm-as-a-judge-attack/metrics",
                         help="Path to save metrics results")
-    # parser.add_argument("--eval_num", type=int, default=10,
-    #                    help="Number of samples to evaluate (for testing)")
     parser.add_argument("--steps", type=int, default=25,
                         help="Number of judge model calls (budget)")
     parser.add_argument("--beam_width", type=int, default=3,

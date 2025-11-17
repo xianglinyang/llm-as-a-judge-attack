@@ -128,7 +128,7 @@ async def main():
                     "final_explanation": traj.trajectories[i].history[0].explanation,
                     "final_response": traj.trajectories[i].initial_answer,
                     "exploration_length": 1,
-                    "skip": 1,
+                    "skip": 0,
                 }
             else:
                 result_item = {
@@ -136,7 +136,7 @@ async def main():
                     "instruction": traj.trajectories[i].question,
                     "output": new_answers[i],
                     "original_score": float(traj.trajectories[i].initial_score),
-                    "original_explanation": traj.trajectories[i].initial_explanation,
+                    "original_explanation": traj.trajectories[i].history[0].explanation,
                     "final_score": float(attack_scores[i]),
                     "final_explanation": attack_explanations[i],
                     "final_response": new_answers[i],
