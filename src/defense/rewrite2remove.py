@@ -118,7 +118,7 @@ async def main():
                             "Example: --exclude 'strategy=random,judge_backbone=gpt-3.5'")
     parser.add_argument("--output_dir", type=str, default="./reports",
                        help="Output directory to save results")
-    parser.add_argument("--rewrite_model_name", type=str, default="openai/gpt-4.1",
+    parser.add_argument("--rewrite_model_name", type=str, default="gemini-2.0-flash-lite",
                        help="Rewrite model name")
     
     args = parser.parse_args()
@@ -163,6 +163,25 @@ async def main():
         ucb_scores = [item.final_score for item in traj.trajectories]
         categories = [item.category for item in traj.trajectories]
 
+        # -----Learn from the following to get the baseline --
+
+        # # if pointwise, baseline response is the original answer
+        # if judge_type in [JudgeType.POINTWISE, JudgeType.MT_BENCH, JudgeType.MLR_BENCH]:
+        #     reward_calculator = create_reward_calculator(judge_type, judge_model_name, "absolute")
+        #     naive_attack_scores, _, naive_attack_explanations = await reward_calculator.calculate_batch_reward(questions, new_answers, original_scores)
+        # elif judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+        #     reward_calculator = create_reward_calculator(judge_type, judge_model_name, "absolute", answer_position=traj.metadata.answer_position)
+        #     baseline_dataset = load_dataset_for_exploration(args.data_dir, traj.metadata.dataset_name, traj.metadata.baseline_response_model_name, traj.metadata.judge_backbone)
+        #     baseline_dataset_mapping = {item['instruction']: item['output'] for item in baseline_dataset}
+        #     baseline_responses = [baseline_dataset_mapping[question] for question in questions]
+        #     naive_attack_scores, _, naive_attack_explanations = await reward_calculator.calculate_batch_reward(questions, new_answers, original_scores, baseline_responses)
+        # else:
+        #     logger.warning(f"Unknown judge type: {traj.metadata.judge_type}, defaulting to pointwise evaluation")
+        #     reward_calculator = create_reward_calculator(judge_type, judge_model_name, "absolute")
+        #     naive_attack_scores, _, naive_attack_explanations = await reward_calculator.calculate_batch_reward(questions, new_answers, original_scores)
+
+        # -----End of learning the baseline --
+
         logger.info(f"  Processing {len(questions)} examples")
         
         # Rewrite both base and UCB answers
@@ -178,14 +197,45 @@ async def main():
         
         judge_type = get_judge_type(judge_type_str)
         judge_model_name = get_implementation_name(judge_backbone)
-        judge_model = load_judge_model(judge_type=judge_type, judge_model_implementation_name=judge_model_name)
+        judge_model = load_judge_model(judge_type=judge_type, judge_model_backbone=judge_model_name)
+        
+        # Load baseline dataset for pairwise comparison if needed
+        baseline_responses = None
+        if judge_type in [JudgeType.PAIRWISE, JudgeType.PAIRWISE_FINE_GRAINED, JudgeType.ALPACA_EVAL, JudgeType.ARENA_HARD_AUTO]:
+            from src.data.data_utils import load_dataset
+            baseline_dataset = load_dataset(args.data_dir, traj.metadata.dataset_name, traj.metadata.baseline_response_model_name)
+            baseline_dataset_mapping = {item['instruction']: item['output'] for item in baseline_dataset}
+            baseline_responses = [baseline_dataset_mapping[question] for question in questions]
+            answer_position = traj.metadata.answer_position
         
         # Re-evaluate rewritten answers
         logger.info("  Re-evaluating base rewritten answers...")
-        base_rewritten_scores, _ = await judge_model.batch_get_score(questions, base_rewritten_answers)
+        if baseline_responses is not None:
+            # Pairwise evaluation
+            if answer_position == "first":
+                base_rewritten_scores, _ = await judge_model.batch_get_score(questions, base_rewritten_answers, baseline_responses)
+            elif answer_position == "second":
+                base_rewritten_scores, _ = await judge_model.batch_get_score(questions, baseline_responses, base_rewritten_answers)
+                base_rewritten_scores = [-score for score in base_rewritten_scores]
+            else:
+                raise ValueError(f"Invalid answer position: {answer_position}")
+        else:
+            # Pointwise evaluation
+            base_rewritten_scores, _ = await judge_model.batch_get_score(questions, base_rewritten_answers)
         
         logger.info("  Re-evaluating UCB rewritten answers...")
-        ucb_rewritten_scores, _ = await judge_model.batch_get_score(questions, ucb_rewritten_answers)
+        if baseline_responses is not None:
+            # Pairwise evaluation
+            if answer_position == "first":
+                ucb_rewritten_scores, _ = await judge_model.batch_get_score(questions, ucb_rewritten_answers, baseline_responses)
+            elif answer_position == "second":
+                ucb_rewritten_scores, _ = await judge_model.batch_get_score(questions, baseline_responses, ucb_rewritten_answers)
+                ucb_rewritten_scores = [-score for score in ucb_rewritten_scores]
+            else:
+                raise ValueError(f"Invalid answer position: {answer_position}")
+        else:
+            # Pointwise evaluation
+            ucb_rewritten_scores, _ = await judge_model.batch_get_score(questions, ucb_rewritten_answers)
 
         # Collect results for this trajectory
         traj_results = []
@@ -234,14 +284,14 @@ async def main():
         logger.info(f"\nBase Answer Defense:")
         logger.info(f"  Success rate: {base_defense_success_rate:.3f} ({traj_df['base_defense_success'].sum()}/{len(traj_df)})")
         logger.info(f"  Average score reduction: {base_avg_score_reduction:.3f}")
-        logger.info(f"  Average score before: {traj_df['base_score_before'].mean():.3f}")
-        logger.info(f"  Average score after: {traj_df['base_score_after'].mean():.3f}")
+        logger.info(f"  Average score before: {traj_df['base_score_before'].mean():.3f} ± {traj_df['base_score_before'].std():.3f}")
+        logger.info(f"  Average score after: {traj_df['base_score_after'].mean():.3f} ± {traj_df['base_score_after'].std():.3f}")
         
         logger.info(f"\nUCB Answer Defense:")
         logger.info(f"  Success rate: {ucb_defense_success_rate:.3f} ({traj_df['ucb_defense_success'].sum()}/{len(traj_df)})")
         logger.info(f"  Average score reduction: {ucb_avg_score_reduction:.3f}")
-        logger.info(f"  Average score before: {traj_df['ucb_score_before'].mean():.3f}")
-        logger.info(f"  Average score after: {traj_df['ucb_score_after'].mean():.3f}")
+        logger.info(f"  Average score before: {traj_df['ucb_score_before'].mean():.3f} ± {traj_df['ucb_score_before'].std():.3f}")
+        logger.info(f"  Average score after: {traj_df['ucb_score_after'].mean():.3f} ± {traj_df['ucb_score_after'].std():.3f}")
         
         # Save per-trajectory summary with all metadata
         traj_summary = {
@@ -281,11 +331,13 @@ async def main():
         
         # Save individual trajectory results and summary
         os.makedirs(args.output_dir, exist_ok=True)
+
+        timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
         
-        traj_results_path = os.path.join(args.output_dir, f"trajectory_{traj_idx+1}_results.csv")
+        traj_results_path = os.path.join(args.output_dir, f"trajectory_{traj_idx+1}_results_{timestamp}.csv")
         traj_df.to_csv(traj_results_path, index=False)
         
-        traj_summary_path = os.path.join(args.output_dir, f"trajectory_{traj_idx+1}_summary.json")
+        traj_summary_path = os.path.join(args.output_dir, f"trajectory_{traj_idx+1}_summary_{timestamp}.json")
         with open(traj_summary_path, 'w') as f:
             json.dump(traj_summary, f, indent=2)
         
@@ -307,23 +359,23 @@ async def main():
     
     # Base answer statistics
     base_defense_success_rate = results_df['base_defense_success'].mean()
-    base_avg_score_reduction = (results_df['base_score_before'] - results_df['base_score_after']).mean()
+    base_avg_score_reduction = (results_df['base_score_after'] - results_df['base_score_before']).mean()
     
     logger.info(f"\nBase Answer Defense:")
     logger.info(f"  Success rate: {base_defense_success_rate:.3f} ({results_df['base_defense_success'].sum()}/{len(results_df)})")
     logger.info(f"  Average score reduction: {base_avg_score_reduction:.3f}")
-    logger.info(f"  Average score before: {results_df['base_score_before'].mean():.3f}")
-    logger.info(f"  Average score after: {results_df['base_score_after'].mean():.3f}")
+    logger.info(f"  Average score before: {results_df['base_score_before'].mean():.3f} ± {results_df['base_score_before'].std():.3f}")
+    logger.info(f"  Average score after: {results_df['base_score_after'].mean():.3f} ± {results_df['base_score_after'].std():.3f}")
     
     # UCB answer statistics
     ucb_defense_success_rate = results_df['ucb_defense_success'].mean()
-    ucb_avg_score_reduction = (results_df['ucb_score_before'] - results_df['ucb_score_after']).mean()
+    ucb_avg_score_reduction = (results_df['ucb_score_after'] - results_df['ucb_score_before']).mean()
     
     logger.info(f"\nUCB Answer Defense:")
     logger.info(f"  Success rate: {ucb_defense_success_rate:.3f} ({results_df['ucb_defense_success'].sum()}/{len(results_df)})")
     logger.info(f"  Average score reduction: {ucb_avg_score_reduction:.3f}")
-    logger.info(f"  Average score before: {results_df['ucb_score_before'].mean():.3f}")
-    logger.info(f"  Average score after: {results_df['ucb_score_after'].mean():.3f}")
+    logger.info(f"  Average score before: {results_df['ucb_score_before'].mean():.3f} ± {results_df['ucb_score_before'].std():.3f}")
+    logger.info(f"  Average score after: {results_df['ucb_score_after'].mean():.3f} ± {results_df['ucb_score_after'].std():.3f}")
     
     # Save overall summary with metadata
     summary = {
@@ -377,18 +429,12 @@ async def main():
             "ucb_avg_score_reduction": (judge_df['ucb_score_before'] - judge_df['ucb_score_after']).mean(),
         }
     
-    summary_path = os.path.join(args.output_dir, "rewrite_defense_summary.json")
+    summary_path = os.path.join(args.output_dir, f"rewrite_defense_summary_{time.strftime('%Y-%m-%d_%H-%M-%S')}.json")
     with open(summary_path, 'w') as f:
         json.dump(summary, f, indent=2)
     logger.info(f"Saved summary to {summary_path}")
 
     logger.info("\nRewrite defense evaluation completed!") 
-    
 
 if __name__ == "__main__":
     asyncio.run(main())
-
-
-
-
-
