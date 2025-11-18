@@ -5,6 +5,7 @@ import re
 import argparse
 import pandas as pd
 import logging
+import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.kernel_ridge import KernelRidge
 from sklearn.preprocessing import StandardScaler
@@ -96,6 +97,19 @@ class StyleControlAbsolute:
             "feature": self.features,
             "coef": "N/A (Kernel model)" # Placeholder
         })
+
+def trajectories_to_dataframe_with_base(trajectories):
+    '''Convert trajectories to DataFrame with base answer'''
+    data = []
+    for traj in trajectories:
+        for item in traj.trajectories:
+            data.append({
+                "question": item.question,
+                "attack": "base",
+                "answer": item.history[0].answer,
+                "score": item.history[0].score
+            })
+    return pd.DataFrame(data)
 
 def trajectories_to_dataframe(trajectories):
     '''Convert trajectories to DataFrame
@@ -193,18 +207,20 @@ if __name__ == "__main__":
     logging.info(f"Loaded {len(random_trajectories)} random trajectories")
 
     ucb_df = trajectories_to_dataframe(ucb_trajectories)
+    base_df = trajectories_to_dataframe_with_base(ucb_trajectories)
     holistic_rewrite_df = trajectories_to_dataframe(holistic_rewrite_trajectories)
     random_df = trajectories_to_dataframe(random_trajectories)
     holistic_rewrite_one_shot_df = trajectories_to_dataframe_with_one_shot(holistic_rewrite_trajectories)
 
     # 3. split in training and testing
+    base_train_df, base_test_df = train_test_split(base_df, test_size=0.2, random_state=42)
     ucb_train_df, ucb_test_df = train_test_split(ucb_df, test_size=0.2, random_state=42)
     holistic_rewrite_train_df, holistic_rewrite_test_df = train_test_split(holistic_rewrite_df, test_size=0.2, random_state=42)
     random_train_df, random_test_df = train_test_split(random_df, test_size=0.2, random_state=42)
     holistic_rewrite_one_shot_train_df, holistic_rewrite_one_shot_test_df = train_test_split(holistic_rewrite_one_shot_df, test_size=0.2, random_state=42)
 
-    train_df = pd.concat([ucb_train_df, holistic_rewrite_train_df, random_train_df, holistic_rewrite_one_shot_train_df])
-    test_df = pd.concat([ucb_test_df, holistic_rewrite_test_df, random_test_df, holistic_rewrite_one_shot_test_df])
+    train_df = pd.concat([base_train_df, ucb_train_df, holistic_rewrite_train_df, random_train_df, holistic_rewrite_one_shot_train_df])
+    test_df = pd.concat([base_test_df, ucb_test_df, holistic_rewrite_test_df, random_test_df, holistic_rewrite_one_shot_test_df])
 
     logging.info(f"Train size: {len(train_df)}, Test size: {len(test_df)}")
 
@@ -226,8 +242,8 @@ if __name__ == "__main__":
     print("="*50)
     print("Style Control Results")
     print("="*50)
-    print("Train Average Score:", train_df["score_sc"].mean())
-    print("Test Average Score:", test_df["score_sc"].mean())
+    print("Train Average Score:", train_df["score_sc"].mean(), train_df["score_sc"].std())
+    print("Test Average Score:", test_df["score_sc"].mean(), test_df["score_sc"].std())
 
     # detailed results, ucb
     train_df_grouped = train_df.groupby("attack")
@@ -235,8 +251,8 @@ if __name__ == "__main__":
     for attack, group in test_df_grouped:
         print("="*50)
         print(f"Attack: {attack}")
-        print("Score before style control:", group["score"].mean())
-        print("Score after style control:", group["score_sc"].mean())
+        print("Score before style control: {mean:.3f} ± {std:.3f}".format(mean=group["score"].mean(), std=group["score"].std()))
+        print("Score after style control: {mean:.3f} ± {std:.3f}".format(mean=group["score_sc"].mean(), std=group["score_sc"].std()))
     
     # 4. train the nonlinear style-control model
     sc.nonlinear_fit(train_df, features=["len_tok","n_headers","n_lists","n_bold"], score_col="score")
@@ -249,5 +265,6 @@ if __name__ == "__main__":
     for attack, group in test_df_grouped:
         print("="*50)
         print(f"Attack: {attack}")
-        print("Score before nonlinear style control:", group["score"].mean())
-        print("Score after nonlinear style control:", group["score_sc_nonlinear"].mean())
+        print("Score before nonlinear style control: {mean:.3f} ± {std:.3f}".format(mean=group["score"].mean(), std=group["score"].std()))
+        print("Score after nonlinear style control: {mean:.3f} ± {std:.3f}".format(mean=group["score_sc_nonlinear"].mean(), std=group["score_sc_nonlinear"].std()))
+

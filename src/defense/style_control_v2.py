@@ -5,6 +5,7 @@ import re
 import argparse
 import pandas as pd
 import logging
+import numpy as np
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
@@ -13,7 +14,7 @@ from src.feature_analysis.feature_extractor import extract_features, get_feature
 
 from src.logging_utils import setup_logging
 from src.results_analysis.results_loader.trajectory_loader import load_trajectory_directory, parse_filter_criteria, parse_exclude_criteria
-from src.defense.style_control import trajectories_to_dataframe_with_one_shot, trajectories_to_dataframe
+from src.defense.style_control import trajectories_to_dataframe_with_one_shot, trajectories_to_dataframe, trajectories_to_dataframe_with_base
 
 logger = logging.getLogger(__name__)
 
@@ -109,19 +110,21 @@ if __name__ == "__main__":
     logging.info(f"Loaded {len(holistic_rewrite_trajectories)} holistic rewrite trajectories")
     logging.info(f"Loaded {len(random_trajectories)} random trajectories")
 
+    base_df = trajectories_to_dataframe_with_base(ucb_trajectories)
     ucb_df = trajectories_to_dataframe(ucb_trajectories)
     holistic_rewrite_df = trajectories_to_dataframe(holistic_rewrite_trajectories)
     random_df = trajectories_to_dataframe(random_trajectories)
-    holistic_rewrite_one_shot_df = trajectories_to_dataframe_with_one_shot(holistic_rewrite_trajectories)
+    holistic_rewrite_one_shot_df = trajectories_to_dataframe_with_one_shot(holistic_rewrite_trajectories)   
 
     # 3. split in training and testing
+    base_train_df, base_test_df = train_test_split(base_df, test_size=0.2, random_state=42)
     ucb_train_df, ucb_test_df = train_test_split(ucb_df, test_size=0.2, random_state=42)
     holistic_rewrite_train_df, holistic_rewrite_test_df = train_test_split(holistic_rewrite_df, test_size=0.2, random_state=42)
     random_train_df, random_test_df = train_test_split(random_df, test_size=0.2, random_state=42)
-    holistic_rewrite_one_shot_train_df, holistic_rewrite_one_shot_test_df = train_test_split(holistic_rewrite_one_shot_df, test_size=0.2, random_state=42)
+    holistic_rewrite_one_shot_train_df, holistic_rewrite_one_shot_test_df = train_test_split(holistic_rewrite_one_shot_df, test_size=0.2, random_state=42)   
 
-    train_df = pd.concat([ucb_train_df, holistic_rewrite_train_df, random_train_df, holistic_rewrite_one_shot_train_df], ignore_index=True)
-    test_df = pd.concat([ucb_test_df, holistic_rewrite_test_df, random_test_df, holistic_rewrite_one_shot_test_df], ignore_index=True)
+    train_df = pd.concat([base_train_df, ucb_train_df, holistic_rewrite_train_df, random_train_df, holistic_rewrite_one_shot_train_df], ignore_index=True)
+    test_df = pd.concat([base_test_df, ucb_test_df, holistic_rewrite_test_df, random_test_df, holistic_rewrite_one_shot_test_df], ignore_index=True)
 
     logging.info(f"Train size: {len(train_df)}, Test size: {len(test_df)}")
 
@@ -146,8 +149,8 @@ if __name__ == "__main__":
     print("="*50)
     print("Style Control Results")
     print("="*50)
-    print("Train Average Score:", train_df["score_sc"].mean())
-    print("Test Average Score:", test_df["score_sc"].mean())
+    print("Train Average Score:", train_df["score_sc"].mean(), train_df["score_sc"].std())
+    print("Test Average Score:", test_df["score_sc"].mean(), test_df["score_sc"].std())
 
     # detailed results, ucb
     train_df_grouped = train_df.groupby("attack")
@@ -155,6 +158,7 @@ if __name__ == "__main__":
     for attack, group in test_df_grouped:
         print("="*50)
         print(f"Attack: {attack}")
-        print("Score before style control:", group["score"].mean())
-        print("Score after style control:", group["score_sc"].mean())
+        print("Score before style control: {mean:.3f} ± {std:.3f}".format(mean=group["score"].mean(), std=group["score"].std()))
+        print("Score after style control: {mean:.3f} ± {std:.3f}".format(mean=group["score_sc"].mean(), std=group["score_sc"].std()))
+
     
