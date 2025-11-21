@@ -545,7 +545,7 @@ class MTBenchModel(JudgeModelABC):
         logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, response
     
-    async def batch_pointwise_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
+    async def batch_get_score(self, q_list, response_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [MT_BENCH_PROMPT.format(question=input_q, answer=response) for input_q, response in zip(q_list, response_list)]
         start_time = time.time()
         call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_SYSTEM_PROMPT, return_cost=True)
@@ -592,7 +592,7 @@ class MTBenchReferenceGuidedModel(JudgeModelABC):
         logger.info(f"Cost: {cost}, Input tokens: {input_tokens}, Output tokens: {output_tokens} for number of questions: 1")
         return score, response
     
-    async def batch_pointwise_score(self, q_list, response_list, ref_answer_list) -> tuple[list[int], list[str]]:
+    async def batch_get_score(self, q_list, response_list, ref_answer_list) -> tuple[list[int], list[str]]:
         formatted_prompts = [MT_BENCH_REFERENCE_GUIDED_PROMPT.format(question=input_q, answer=response, ref_answer=ref_answer) for input_q, response, ref_answer in zip(q_list, response_list, ref_answer_list)]
         start_time = time.time()
         call_results = await self.model.batch_invoke(formatted_prompts, system_prompt=MT_BENCH_REFERENCE_GUIDED_SYSTEM_PROMPT, return_cost=True)
