@@ -71,13 +71,16 @@ openrouter_models = [
     "google/gemini-2.5-pro",
     "google/gemini-2.5-pro-preview",
     "google/gemini-2.5-pro-preview-03-25",
+    "google/gemini-2.0-flash-lite-001",
+    "google/gemini-2.0-flash",
 
     # DeepSeek
     "deepseek/deepseek-r1-0528",
     "deepseek/deepseek-chat-v3-0324",
+    "deepseek/deepseek-r1-0528-qwen3-8b",
 
     # anthropic
-    "anthropic/claude-opus-4.1"
+    "anthropic/claude-opus-4.1",
     "anthropic/claude-opus-4",
     "anthropic/claude-sonnet-4",
     "anthropic/claude-3.7-sonnet",
@@ -88,10 +91,12 @@ openrouter_models = [
 
     # qwen
     # 3.0
-    "qwen/qwen3-max"
+    "qwen/qwen3-max",
     "qwen/qwen3-235b-a22b-thinking-2507",
     "qwen/qwen3-235b-a22b-2507",
     "qwen/qwen3-30b-a3b-instruct-2507",
+    "qwen/qwen3-8b",
+
     # 2.5
     "qwen/qwen-turbo",
     "qwen/qwen-plus",
@@ -103,6 +108,7 @@ openrouter_models = [
     "meta-llama/llama-3.1-70b-instruct",
     "meta-llama/llama-3-70b-instruct",
     "meta-llama/llama-3.1-405b-instruct",
+    "meta-llama/llama-3-8b-instruct",
 
     # X-AI
     "x-ai/grok-4",
@@ -130,6 +136,7 @@ dashscope_models = [
     "qwen3-30b-a3b",
     "qwen3-14b",
     "qwen3-8b",
+
     # 2.5
     "qwq-plus",
     "qwq-32b"
@@ -196,10 +203,13 @@ implementation_to_name = {
     "google/gemini-2.5-pro": "gemini-2.5-pro",
     "google/gemini-2.5-pro-preview": "gemini-2.5-pro-preview",
     "google/gemini-2.5-pro-preview-03-25": "gemini-2.5-pro-preview-03-25",
+    "google/gemini-2.0-flash-lite-001": "gemini-2.0-flash-lite",
+    "google/gemini-2.0-flash": "gemini-2.0-flash",
 
     # OpenRouter DeepSeek models
     "deepseek/deepseek-r1-0528": "deepseek-r1-0528",
     "deepseek/deepseek-chat-v3-0324": "deepseek-chat-v3-0324",
+    "deepseek/deepseek-r1-0528-qwen3-8b": "deepseek-r1-0528-qwen3-8b",
 
     # OpenRouter Anthropic models
     "anthropic/claude-opus-4.1": "claude-opus-4.1",
@@ -219,6 +229,7 @@ implementation_to_name = {
     "qwen/qwen3-235b-a22b-thinking-2507": "qwen3-235b-a22b-thinking-2507",
     "qwen/qwen3-235b-a22b-2507": "qwen3-235b-a22b-2507",
     "qwen/qwen3-30b-a3b-instruct-2507": "qwen3-30b-a3b-instruct-2507",
+    "qwen/qwen3-8b": "qwen3-8b",
 
     # OpenRouter Meta Llama models
     "meta-llama/llama-4-scout": "llama-4-scout",
@@ -226,6 +237,7 @@ implementation_to_name = {
     "meta-llama/llama-3.1-70b-instruct": "llama-3.1-70b-instruct",
     "meta-llama/llama-3-70b-instruct": "llama-3-70b-instruct",
     "meta-llama/llama-3.1-405b-instruct": "llama-3.1-405b-instruct",
+    "meta-llama/llama-3-8b-instruct": "llama-3-8b-instruct",
 
     # DashScope DeepSeek models
     "deepseek-r1": "deepseek-r1",
