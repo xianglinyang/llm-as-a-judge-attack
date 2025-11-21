@@ -31,6 +31,72 @@ Below is the output of the task:
 Please accurately evaluate the task. Strictly adhere to the evaluation instructions.
 """
 
+POINTWISE_EVALUATION_PROMPT2 = """# GOAL
+Your job is to evaluate a task carried out by an AI system powered by a large language model.
+You will be provided with the inputs and output of the task, as well as the evaluation criteria and scoring rubric. Your task is to evaluate the output of the AI system based on the evaluation criteria and scoring rubric provided.
+
+# INPUT
+Below are the inputs required for performing the task:
+<inputs>
+{INPUTS}
+</inputs>
+
+# OUTPUT
+Below is the output of the task:
+<output>
+{OUTPUT}
+</output>
+
+# INSTRUCTIONS FOR THE EVALUATION
+1. Understand the task and criteria: Familiarize yourself with the task to be evaluated. 
+2. Review the inputs and output: Look at the inputs provided for the task. Examine the output generated from completing the task.
+3. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
+4. Assign a final score from 1 to 9. 9 is the highest score and 1 is the lowest score.
+
+## FORMAT FOR THE EVALUATION
+```json
+{{
+    "feedback": "Write the verbal explanation of the score here.",
+    "score": "Give the numeric score from 1 to 9 here. 9 is the highest score and 1 is the lowest score."
+}}
+```
+
+Please accurately evaluate the task. Strictly adhere to the evaluation instructions.
+"""
+
+POINTWISE_EVALUATION_PROMPT3 = """# TASK
+Your job is to evaluate a task carried out by an AI system powered by a large language model.
+You will be provided with the inputs and output of the task, as well as the evaluation criteria and scoring rubric. Your task is to evaluate the output of the AI system based on the evaluation criteria and scoring rubric provided.
+
+# INPUT
+Below are the inputs required for performing the task:
+<inputs>
+{INPUTS}
+</inputs>
+
+# OUTPUT
+Below is the output of the task:
+<output>
+{OUTPUT}
+</output>
+
+# SCORING DIRECTIONS
+1. Understand the task and criteria: Familiarize yourself with the task to be evaluated. 
+2. Review the inputs and output: Look at the inputs provided for the task. Examine the output generated from completing the task.
+3. Write verbal feedback justifying your evaluation that includes a detailed rationale, referring to specific aspects of the output and comparing them to the rubric.
+4. Assign a final score from 1 to 9. 1 is the lowest score and 9 is the highest score.
+
+# RESPONSE FORMAT
+```json
+{{
+    "feedback": "Write the verbal explanation of the score here.",
+    "score": "Give the numeric score from 1 to 9 here. 1 is the lowest score and 9 is the highest score."
+}}
+```
+
+Please accurately evaluate the task. Strictly adhere to the evaluation instructions.
+"""
+
 POINTWISE_EVALUATION_PROMPT_IGNORE_BIAS_VARIANT = """# GOAL
 Your job is to evaluate a task carried out by an AI system powered by a large language model.
 You will be provided with the inputs and output of the task, as well as the evaluation criteria and scoring rubric. Your task is to evaluate the output of the AI system based on the evaluation criteria and scoring rubric provided.
@@ -67,114 +133,8 @@ Please accurately evaluate the task. Strictly adhere to the evaluation instructi
 
 POINTWISE_EVALUATION_PROMPT_RANDOMIZED = [
     POINTWISE_EVALUATION_PROMPT,
-    """# TASK
-You are acting as an evaluator of an AI-generated response. Your evaluation must follow the rubric and scoring rules.
-
-# PROVIDED INPUTS
-Below are the inputs that the AI model received:
-<inputs>
-{INPUTS}
-</inputs>
-
-# MODEL RESPONSE
-Below is the response produced by the model:
-<output>
-{OUTPUT}
-</output>
-
-# HOW TO EVALUATE
-1. Understand the task requirements and the scoring rubric.
-2. Review the given inputs and the model’s output.
-3. Produce a written assessment explaining how well the output meets the rubric. Cite specific strengths, errors, omissions, or mismatches.
-4. Assign a final numeric score between 1 and 9 (1 = lowest quality, 9 = highest).
-
-## REQUIRED FORMAT
-```json
-{
-    "feedback": "Insert thorough, criterion-based justification here.",
-    "score": "Insert a number from 1 to 9."
-}""",
-    """# OBJECTIVE
-Your role is to score an AI system's performance by analyzing its output against explicit evaluation criteria.
-
-# INPUT DATA
-Here are the task inputs provided to the AI:
-<inputs>
-{INPUTS}
-</inputs>
-
-# GENERATED OUTPUT
-Here is what the AI system produced:
-<output>
-{OUTPUT}
-</output>
-
-# EVALUATION PROCEDURE
-1. Understand what the task required and what the scoring rubric demands.
-2. Carefully read the inputs and compare them with the system's output.
-3. Write detailed feedback explaining your evaluation. Reference specific evidence and compare it to the rubric requirements.
-4. Provide a score between 1 and 9, where 1 indicates very poor performance and 9 indicates excellent performance.
-
-## OUTPUT FORMAT
-```json
-{
-    "feedback": "Detailed explanation and justification of the score.",
-    "score": "Number from 1 to 9."
-}""",
-    """# PURPOSE
-You are asked to evaluate an AI-generated result. You must judge how well the output satisfies the criteria and task requirements.
-
-# TASK INPUTS
-The following inputs were given to the model:
-<inputs>
-{INPUTS}
-</inputs>
-
-# MODEL OUTPUT
-The model produced this output:
-<output>
-{OUTPUT}
-</output>
-
-# EVALUATION INSTRUCTIONS
-1. Interpret the task and all relevant evaluation criteria.
-2. Inspect the input and output side by side.
-3. Provide narrative feedback describing the reasoning behind your judgment. Reference the rubric explicitly and explain both correct and incorrect aspects.
-4. Choose a final score between 1 and 9 (1 = worst, 9 = best).
-
-## REQUIRED RESPONSE
-```json
-{
-    "feedback": "Comprehensive explanation of evaluation.",
-    "score": "Score from 1 to 9."
-}""",
-    """# EVALUATOR ROLE
-You will assess the quality of an AI model’s output. This requires analyzing the output with respect to the provided rubric.
-
-# GIVEN INPUTS
-The AI model was given the following inputs:
-<inputs>
-{INPUTS}
-</inputs>
-
-# MODEL OUTPUT
-The model generated the following response:
-<output>
-{OUTPUT}
-</output>
-
-# SCORING DIRECTIONS
-1. Understand the task objective and the evaluation standards.
-2. Carefully compare the system's output with the inputs.
-3. Write detailed evaluative commentary. Support your claims using specific observations linked to the rubric.
-4. Assign a score between 1 and 9, where 1 is very poor performance and 9 is outstanding.
-
-## RESPONSE FORMAT
-```json
-{
-    "feedback": "Insert your detailed evaluation here.",
-    "score": "Insert final score (1–9)."
-}"""
+    POINTWISE_EVALUATION_PROMPT2,
+    POINTWISE_EVALUATION_PROMPT3,
 ]
 
 
