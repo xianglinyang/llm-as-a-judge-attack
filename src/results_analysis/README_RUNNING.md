@@ -15,6 +15,8 @@
 python -m src.results_analysis.plot_main_results --report_metric pool_mean
 # mlr bench case study
 python plot_multi_dimensional_comparison.py --show_table --group_by judge_model --filter judge_type=mlr_bench --exclude judge_model=gpt-5
+
+python plot_multi_dimensional_comparison.py --show_table --filter judge_backbone=qwen3-235b-a22b-2507,llm_agent_model=gemini-2.0-flash-lite,dataset_name=AlpacaEval
 ```
 
 
@@ -110,12 +112,52 @@ Then read the result from `/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/repo
 
 ## Debias Model
 ```bash
-python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval
-python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=ArenaHard
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-1.5-flash-8b
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=ArenaHard,llm_agent_name=gemini-1.5-flash-8b
 
-python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=alpaca_eval
-python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=arena_hard_auto
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=alpaca_eval,llm_agent_name=gemini-1.5-flash-8b
+python -m src.defense.style_control --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=arena_hard_auto,llm_agent_name=gemini-1.5-flash-8b
 ```
-Then plot a bar chart.
+
+Then plot a bar chart with plot_debias_model.ipynb.
+```bash
+python -m src.defense.style_control_v2 --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-1.5-flash-8b
+python -m src.defense.style_control_v2 --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=ArenaHard,llm_agent_name=gemini-1.5-flash-8b
+
+python -m src.defense.style_control_v2 --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=alpaca_eval,llm_agent_name=gemini-1.5-flash-8b
+python -m src.defense.style_control_v2 --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=arena_hard_auto,llm_agent_name=gemini-1.5-flash-8b
+
+python -m src.defense.style_control_nonlinear_v2 --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval
+```
+
+## Rewrite
+```bash
+python -m src.defense.rewrite2remove --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-1.5-flash-8b
+python -m src.defense.rewrite2remove --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=ArenaHard,llm_agent_name=gemini-1.5-flash-8b
+
+python -m src.defense.rewrite2remove --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=alpaca_eval,llm_agent_name=gemini-1.5-flash-8b
+python -m src.defense.rewrite2remove --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=arena_hard_auto,llm_agent_name=gemini-1.5-flash-8b
+
+```
+
+# Baselines
+
+```bash
+python -m src.baselines.prompt_injection.naive --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+python -m src.baselines.prompt_injection.fake_completion --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+python -m src.baselines.prompt_injection.context_ignore --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+python -m src.baselines.prompt_injection.escape_chr --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+python -m src.baselines.prompt_injection.null_model_attack --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=gpt-5 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+
+python plot_scores.py --show_table --group_by judge_model,strategy
+
+
+python -m src.baselines.jailbreak.PAIR.main --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=qwen3-235b-a22b-2507 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+python -m src.baselines.jailbreak.TAP.main --exclude llm_agent_name=gpt-4.1-nano,judge_backbone=qwen3-235b-a22b-2507 --filter judge_type=pointwise,dataset_name=AlpacaEval,llm_agent_name=gemini-2.0-flash-lite
+python -m src.baselines.jailbreak.AutoDAN.main --filter judge_type=pointwise,dataset_name=ArenaHard,llm_agent_name=gemini-2.0-flash-lite
+
+python plot_multi_dimensional_comparison.py --show_table --filter dataset=AlpacaEval
+```
+
 
 
