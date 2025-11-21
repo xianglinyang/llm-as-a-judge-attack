@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import List, Tuple, Optional, Dict
 
 from src.llm_zoo import load_model
+from src.llm_zoo.api_zoo import get_model_name
 from src.evolve_agent.bandit.reward_cal import RewardCalculatorABC, create_reward_calculator
 from src.evolve_agent.utils import _estimate_tokens, _worst_index, _best_item
 from src.logging_utils import setup_logging
@@ -718,7 +719,7 @@ async def main():
             "dataset_name": traj.metadata.dataset_name,
             "judge_backbone": traj.metadata.judge_backbone,
             "baseline_response_model_name": traj.metadata.baseline_response_model_name,
-            "llm_agent_name": args.attack_model_name,
+            "llm_agent_name": get_model_name(args.attack_model_name),
             "evaluator_model_name": args.evaluator_model_name,
             "response_model_name": traj.metadata.response_model_name,
             "budget": args.steps,

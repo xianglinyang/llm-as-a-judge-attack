@@ -860,7 +860,7 @@ async def main():
             "dataset_name": traj.metadata.dataset_name,
             "judge_backbone": traj.metadata.judge_backbone,
             "baseline_response_model_name": traj.metadata.baseline_response_model_name,
-            "llm_agent_name": None,
+            "llm_agent_name": get_model_name(args.mutation_model_name),
             "response_model_name": traj.metadata.response_model_name,
             "budget": args.steps,
             "pool_size": args.population_size,

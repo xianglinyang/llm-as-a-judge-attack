@@ -337,7 +337,7 @@ async def main():
                        help="Path to save metrics results")
     parser.add_argument("--steps", type=int, default=25,
                        help="Number of steps to run the attack")
-    parser.add_argument("--attack_model_name", type=str, default="gemini-2.0-flash-lite",
+    parser.add_argument("--attack_model_name", type=str, default="google/gemini-2.0-flash-lite-001",
                        help="Model name for the PAIR attacker")
         
     
@@ -424,7 +424,7 @@ async def main():
             "dataset_name": traj.metadata.dataset_name,
             "judge_backbone": traj.metadata.judge_backbone,
             "baseline_response_model_name": traj.metadata.baseline_response_model_name,
-            "llm_agent_name": None,
+            "llm_agent_name": get_model_name(args.attack_model_name),
             "response_model_name": traj.metadata.response_model_name,
             "budget": args.steps,
             "pool_size": 1,
