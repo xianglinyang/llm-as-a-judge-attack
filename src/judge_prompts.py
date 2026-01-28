@@ -276,11 +276,7 @@ Please accurately evaluate the task. Strictly adhere to the output format.
 """
 
 # Official AlpacaEval 2.0
-ALPACA_EVAL_SYSTEM_PROMPT = """
-You are a highly efficient assistant, who evaluates and selects the best large
-language model (LLMs) based on the quality of their responses to a given instruction.
-This process will be used to create a leaderboard reflecting the most accurate and
-human-preferred answers."""
+ALPACA_EVAL_SYSTEM_PROMPT = """You are a highly efficient assistant, who evaluates and selects the best large language model (LLMs) based on the quality of their responses to a given instruction. This process will be used to create a leaderboard reflecting the most accurate and human-preferred answers."""
 
 ALPACA_EVAL_PROMPT = """
 I require a leaderboard for various large language models. I’ll provide you with

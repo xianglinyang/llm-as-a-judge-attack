@@ -196,9 +196,9 @@ OPENAI_RATE_LIMIT = RateLimitConfig(
 
 OPENROUTER_RATE_LIMIT = RateLimitConfig(
     max_calls=7000,
-    calls_per_minute=7000,  # OpenAI's default rate limit
-    calls_per_second=500,
-    delay_between_calls=0.0
+    calls_per_minute=1000,  # OpenAI's default rate limit
+    calls_per_second=10,
+    delay_between_calls=0.1
 )
 
 GEMINI_RATE_LIMIT = RateLimitConfig(

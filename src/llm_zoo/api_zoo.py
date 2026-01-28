@@ -210,6 +210,7 @@ implementation_to_name = {
     "deepseek/deepseek-r1-0528": "deepseek-r1-0528",
     "deepseek/deepseek-chat-v3-0324": "deepseek-chat-v3-0324",
     "deepseek/deepseek-r1-0528-qwen3-8b": "deepseek-r1-0528-qwen3-8b",
+    "deepseek/deepseek-r1-distill-qwen-7b": "deepseek-r1-distill-qwen-7b",
 
     # OpenRouter Anthropic models
     "anthropic/claude-opus-4.1": "claude-opus-4.1",
