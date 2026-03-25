@@ -50,6 +50,7 @@ import numpy as np
 from src.results_analysis.results_loader.utils import parse_exclude_criteria, parse_filter_criteria
 
 logger = logging.getLogger(__name__)
+DEFAULT_EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
 
 
 @dataclass
@@ -67,6 +68,7 @@ class ExplorationMetadata:
     timestamp: str
     time_taken: float
     file_path: str
+    embedding_model_name: str = DEFAULT_EMBEDDING_MODEL_NAME
     
     # Optional fields that may be present
     alpha: Optional[float] = None
@@ -92,6 +94,7 @@ class ExplorationMetadata:
             timestamp=data.get('timestamp', 'unknown'),
             time_taken=data.get('time_taken', 0.0),
             file_path=file_path,
+            embedding_model_name=data.get('embedding_model_name', DEFAULT_EMBEDDING_MODEL_NAME),
             alpha=data.get('alpha'),
             lambda_reg=data.get('lambda_reg'),
             reward_type=data.get('reward_type'),
