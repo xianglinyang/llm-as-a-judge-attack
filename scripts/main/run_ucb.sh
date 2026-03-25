@@ -7,25 +7,26 @@
 per_gpu_jobs_num=1
 gpu_num=1
 jobs_num=$((per_gpu_jobs_num*gpu_num))
-gpu_ids=(0 1 2 3 4 5 6 7)
+gpu_ids=(0 1)
 
 # Hyperparameters
-budgets=(30)
+budgets=(25)
 pool_sizes=(3)
 
 # LLM Agents
 llm_agents=(
     # "gpt-4.1-nano"
-    "gemini-1.5-flash-8b"
+    # "gemini-1.5-flash-8b"
     # "openai/gpt-4.1-nano"
+    "gemini-2.0-flash-lite"
 )
 
 # Response Models
 response_models=(
-    # "gpt-4.1-mini"
-    "claude-3-7-sonnet-20250219"
-    "gemini-2.5-pro-preview-03-25"
-    "o4-mini"
+    "gpt-4.1-mini"
+    # "claude-3-7-sonnet-20250219"
+    # "gemini-2.5-pro-preview-03-25"
+    # "o4-mini"
 )
 
 # Judge Models
@@ -34,9 +35,12 @@ judge_model_names=(
     # "meta-llama/llama-3.3-70b-instruct"
     # "deepseek/deepseek-r1-0528"
     # "google/gemini-2.5-flash"
-    "openai/o3-mini"
+    # "openai/o3-mini"
     # "openai/gpt-5"
     # "openai/o4-mini"
+    "deepseek/deepseek-r1-0528-qwen3-8b"
+    "qwen/qwen3-8b"
+    # "meta-llama/llama-3-8b-instruct"
 )
 
 init_model_paths=(
@@ -49,8 +53,9 @@ init_model_paths=(
     # For standard UCB or random, this is ignored:
     None
     None
-    None
-    None
+    # None
+    # None
+    # None
 )
 
 # Judge Types
@@ -58,29 +63,35 @@ judge_types=(
     # "pointwise"
     # "pairwise_fine_grained"
     # "pairwise"
-    "mlr_bench"
-    # "alpaca_eval"
+    # "mlr_bench"
+    "alpaca_eval"
     # "arena_hard_auto"
 )
 
-eval_num=10
-
+eval_num=805
 test_modes=(
     "ucb"                      # UCB (standard, cold start)
     # "ucb_with_warmup"        # UCB with warmup (uses pre-trained model)
-    "random"                 # Random arm selection baseline
+    # "random"                 # Random arm selection baseline
 )
 
 datasets=(
     # "MTBench"
-    # "AlpacaEval"
+    "AlpacaEval"
     # "ArenaHard"
-    "MLRBench"
+    # "MLRBench"
 )
 
 reward_types=(
     "relative"
     # "absolute"
+)
+
+embedding_model_names=(
+    "minilm"
+    # "all-mpnet-base-v2"
+    # "bge-base-en-v1.5"
+    # "e5-base-v2"
 )
 
 
@@ -93,7 +104,7 @@ baseline_response_models=(
 )
 
 answer_positions=(
-    "first"
+    # "first"
     "second"
 )
 
@@ -141,8 +152,10 @@ answer_positions=(
 #                                     --response_model_name ${response_model} \
 #                                     --eval_num ${eval_num} \
 #                                     ${init_model_arg} \
-#                                     --data_dir /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data \
-#                                     --save_trajectory_path /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/ &
+#                                     --alpha 1.5 \
+#                                     --data_dir /data2/xianglin/A40/llm-as-a-judge-attack/data \
+#                                     --save_trajectory_path /data2/xianglin/A40/llm-as-a-judge-attack/trajectories/ \
+#                                     --save_metrics_path /data2/xianglin/A40/llm-as-a-judge-attack/metrics/ &
 
 #                                     # Increment counter
 #                                     counter=$((counter + 1))
@@ -192,8 +205,9 @@ answer_positions=(
 #                                             --answer_position ${answer_position} \
 #                                             --baseline_response_model ${baseline_response_model} \
 #                                             --reward_type ${reward_type} \
-#                                             --data_dir /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data \
-#                                             --save_trajectory_path /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/ &
+#                                             --data_dir /data2/xianglin/A40/llm-as-a-judge-attack/data \
+#                                             --save_trajectory_path /data2/xianglin/A40/llm-as-a-judge-attack/trajectories/ \
+#                                             --save_metrics_path /data2/xianglin/A40/llm-as-a-judge-attack/metrics/ &
 
 #                                             # Increment counter
 #                                             counter=$((counter + 1))
@@ -223,6 +237,7 @@ for test_mode in ${test_modes[@]}; do
         for pool_size in ${pool_sizes[@]}; do
             for llm_agent in ${llm_agents[@]}; do
                 for response_model in ${response_models[@]}; do
+                    for embedding_model_name in ${embedding_model_names[@]}; do
                     for judge_model_name in ${judge_model_names[@]}; do
                         for judge_type in ${judge_types[@]}; do
                             for dataset in ${datasets[@]}; do
@@ -237,9 +252,11 @@ for test_mode in ${test_modes[@]}; do
                                     --llm_agent_name ${llm_agent} \
                                     --dataset_name ${dataset} \
                                     --response_model_name ${response_model} \
+                                    --embedding_model_name ${embedding_model_name} \
                                     --eval_num ${eval_num} \
-                                    --data_dir /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data \
-                                    --save_trajectory_path /mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/trajectories/ &
+                                    --data_dir /data2/xianglin/A40/llm-as-a-judge-attack/data \
+                                    --save_trajectory_path /data2/xianglin/A40/llm-as-a-judge-attack/trajectories/ \
+                                    --save_metrics_path /data2/xianglin/A40/llm-as-a-judge-attack/metrics/ &
 
                                     # Increment counter
                                     counter=$((counter + 1))
@@ -250,6 +267,7 @@ for test_mode in ${test_modes[@]}; do
                                 done
                             done
                         done
+                    done
                     done
                 done
             done
