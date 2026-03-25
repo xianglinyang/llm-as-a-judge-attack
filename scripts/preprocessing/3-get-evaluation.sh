@@ -2,40 +2,43 @@
 
 parallel_num=1
 
-data_dir="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data"
+data_dir="/data2/xianglin/A40/llm-as-a-judge-attack/data"
 
 dataset_names=(
     # "MTBench"
-    # "AlpacaEval"
+    "AlpacaEval"
     # "ArenaHard"
-    "MLRBench"
+    # "MLRBench"
     # "UltraFeedback"
 )
 response_models=(
-    # "gpt-4.1-mini"
-    # "openai/gpt-4o"
-    "gemini-2.5-pro-preview-03-25"
-    "claude-3-7-sonnet-20250219"
-    "o4-mini"
+    "gpt-4.1-mini"
+    "gpt-4o"
+    # "gemini-2.5-pro-preview-03-25"
+    # "claude-3-7-sonnet-20250219"
+    # "o4-mini"
 )
 
 # Judge Models
 judge_models=(
-    "qwen/qwen3-235b-a22b-2507"
-    "meta-llama/llama-3.3-70b-instruct"
-    "deepseek/deepseek-r1-0528"
-    "openai/o3-mini"
-    "google/gemini-2.5-flash"
+    # "qwen/qwen3-235b-a22b-2507"
+    # "meta-llama/llama-3.3-70b-instruct"
+    # "deepseek/deepseek-r1-0528"
+    # "openai/o3-mini"
+    # "google/gemini-2.5-flash"
     # "openai/gpt-5"
     # "google/gemini-2.5-pro"
     # "anthropic/claude-opus-4"
     # "x-ai/grok-4"
     # "qwen/qwen3-max"
     # "openai/o4-mini"
+    # "deepseek/deepseek-r1-0528-qwen3-8b"
+    # "qwen/qwen3-8b"
+    "meta-llama/llama-3-8b-instruct"
 )
 
 
-judge_type="mlr_bench"
+judge_type="pointwise"
 
 counter=0
 
