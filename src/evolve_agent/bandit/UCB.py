@@ -9,7 +9,12 @@ from typing import List, Optional, Tuple, Dict, Any
 
 from src.evolve_agent.bandit.base import ContextualLinBanditAgent
 from src.llm_evaluator import JudgeType
-from src.text_encoder import TextEncoder, MiniLMTextEncoder
+from src.text_encoder import (
+    TextEncoder,
+    load_text_encoder,
+    get_available_embedding_model_names,
+    get_available_embedding_precisions,
+)
 from src.llm_zoo import BaseLLM, load_model
 from src.logging_utils import setup_logging
 from src.evolve_agent.utils import (prepare_dataset_for_exploration, 
@@ -1027,9 +1032,11 @@ class ContextualLinUCBAgent(ContextualLinBanditAgent):
 
 async def main(args):
     llm_agent = load_model(args.llm_agent_name)
-    embedding_model = MiniLMTextEncoder()
+    embedding_model = load_text_encoder(args.embedding_model_name, args.embedding_precision)
     judge_type = JudgeType(args.judge_type)
     judge_model_backbone = args.judge_model_name
+
+    n_features = len(embedding_model.encode("embedding dimension probe"))
 
     # Use the enhanced reward system instead of manual pairwise scoring
     question_list, init_response_list, category_list, original_score_list, original_explanation_list, baseline_response_list = await prepare_dataset_for_exploration(args.data_dir, args.dataset_name, args.response_model_name, judge_type, judge_model_backbone, args.baseline_response_model_name, args.answer_position)
@@ -1039,7 +1046,7 @@ async def main(args):
     eval_num, selected_idxs, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list = sample_and_filter_data(selected_idxs, args.eval_num, question_list, init_response_list, original_score_list, original_explanation_list, category_list, baseline_response_list)
 
     logger.info(f"Initializing the agent...")
-    agent = ContextualLinUCBAgent(args.n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, args.reward_type, args.alpha, args.lambda_reg, args.answer_position)
+    agent = ContextualLinUCBAgent(n_features, llm_agent, embedding_model, judge_type, judge_model_backbone, args.reward_type, args.alpha, args.lambda_reg, args.answer_position)
     logger.info(f"Agent initialized.")
     logger.info("-"*100)
 
@@ -1071,6 +1078,10 @@ async def main(args):
     end_time = time.time()
         
     analysis = get_result_analysis(test_results)
+    saved_embedding_name = getattr(embedding_model, "model_name", args.embedding_model_name)
+    if isinstance(saved_embedding_name, str) and saved_embedding_name.startswith("sentence-transformers/"):
+        saved_embedding_name = saved_embedding_name.split("/", 1)[1]
+
     meta_info = {
         "strategy": args.test_mode,
         "judge_type": args.judge_type,
@@ -1080,9 +1091,11 @@ async def main(args):
         "baseline_response_model_name": get_model_name(args.baseline_response_model_name),
         "llm_agent_name": get_model_name(args.llm_agent_name),
         "response_model_name": get_model_name(args.response_model_name),
+        "embedding_model_name": saved_embedding_name,
+        "embedding_precision": args.embedding_precision,
         "test_mode": args.test_mode,
         "lambda_reg": args.lambda_reg,
-        "n_features": args.n_features,
+        "n_features": n_features,
         "budget": args.Budget,
         "pool_size": args.pool_size,
         "eval_num": eval_num,
@@ -1125,10 +1138,22 @@ if __name__ == "__main__":
     parser.add_argument("--baseline_response_model_name", type=str, default=None, help="The model name of the baseline response model")
     parser.add_argument("--llm_agent_name", type=str, default="gpt-4.1-nano")
     parser.add_argument("--response_model_name", type=str, default="gpt-4.1-mini")
+    parser.add_argument(
+        "--embedding_model_name",
+        type=str,
+        default="all-minilm-l6-v2",
+        help=f"Embedding model used for context encoding. Available aliases: {get_available_embedding_model_names()}",
+    )
+    parser.add_argument(
+        "--embedding_precision",
+        type=str,
+        default="bf16",
+        choices=get_available_embedding_precisions(),
+        help="Numerical precision for embedding model inference.",
+    )
     parser.add_argument("--dataset_name", type=str, default="AlpacaEval")
     parser.add_argument("--reward_type", type=str, default="relative", choices=["relative", "absolute"])
     parser.add_argument("--lambda_reg", type=float, default=1.0)
-    parser.add_argument("--n_features", type=int, default=384)
     parser.add_argument("--init_model_path", type=str, default=None)
     parser.add_argument("--test_mode", type=str, default="ucb", choices=["ucb", "ucb_with_warmup", "random"])
     parser.add_argument("--data_dir", type=str, default="/mnt/hdd1/ljiahao/xianglin/llm-as-a-judge-attack/data")
